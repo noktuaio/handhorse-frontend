@@ -1,0 +1,379 @@
+/* Shell layout — structural only; colors/borders via inline styles */
+
+.root {
+  min-height: 100vh;
+  padding-bottom: 120px;
+}
+
+@media (min-width: 768px) {
+  .root {
+    padding-left: 88px;
+    padding-bottom: 0;
+  }
+}
+
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  padding: 16px;
+}
+
+.main {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 88px 16px 40px;
+  box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+  .main {
+    padding-top: 40px;
+  }
+}
+
+/* Nav + loading strip (stacked: mensagem + barra fina + nav) */
+.navZone {
+  position: fixed;
+  bottom: 20px;
+  left: 16px;
+  right: 16px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .navZone {
+    left: 12px;
+    right: auto;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+}
+
+.navLoadingStrip {
+  width: 100%;
+  max-width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.navLoadingMessage {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: center;
+  line-height: 1.35;
+  padding: 0 8px;
+}
+
+.navLoadingTrack {
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.navLoadingBar {
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  animation: navLoadingShimmer 1.1s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+
+@keyframes navLoadingShimmer {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(350%);
+    opacity: 0.85;
+  }
+}
+
+/* Nav bar */
+.nav {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (min-width: 768px) {
+  .nav {
+    width: auto;
+    max-width: none;
+  }
+}
+
+.navPill {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  align-items: center;
+  justify-content: space-around;
+  padding: 10px;
+  border-radius: 2.5rem;
+}
+
+@media (min-width: 768px) {
+  .navPill {
+    flex-direction: column;
+    justify-content: center;
+    padding: 12px;
+  }
+}
+
+/* Top stats row (Cavalos + Financeiro) */
+.topStatsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 380px) {
+  .topStatsGrid {
+    grid-template-columns: 1fr 2fr;
+  }
+}
+
+/* Registry */
+.registryHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .registryHeader {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 480px) {
+  .cardsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .cardsGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .cardsGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.horseCard {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  cursor: pointer;
+}
+
+.horseCard:hover {
+  transform: scale(1.025);
+}
+
+/* Genealogy page — sem scroll na página: só o card da árvore rola */
+.genealogyPageShell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: calc(100dvh - 14rem);
+  max-height: calc(100dvh - 14rem);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+  .genealogyPageShell {
+    height: calc(100dvh - 7.5rem);
+    max-height: calc(100dvh - 7.5rem);
+  }
+}
+
+.genealogyGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  /* Mobile: sidebar fecha (auto) e cresce no acordeão; árvore ocupa o resto */
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+@media (min-width: 1024px) {
+  .genealogyGrid {
+    grid-template-columns: 1fr 3fr;
+    grid-template-rows: minmax(0, 1fr);
+    /* Sidebar se ajusta ao conteúdo; tree card estica via align-self */
+    align-items: start;
+  }
+  .genealogyTreeCard {
+    align-self: stretch;
+  }
+}
+
+/* Coluna esquerda: cresce com o acordeão */
+.genealogySidebarColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.genealogySidebarList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Card da árvore: única zona de scroll vertical do conteúdo da árvore */
+.genealogyTreeCard {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.genealogyTreeScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+/* Cada nível da árvore: faixa com scroll horizontal */
+.genealogyLevelScroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  padding-bottom: 10px;
+  margin-left: -6px;
+  margin-right: -6px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.genealogyLevelRow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 12px;
+  width: max-content;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.genealogyCardSlot {
+  flex: 0 0 auto;
+  width: 190px;
+  max-width: min(190px, 88vw);
+}
+
+.genealogyLevelTitle {
+  margin: 0 0 10px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+/* Health page */
+.healthGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 1024px) {
+  .healthGrid {
+    grid-template-columns: 3fr 1fr;
+    align-items: start;
+  }
+}
+
+.healthCard {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.healthCard:hover {
+  transform: translateY(-2px);
+}
+
+/* Finances stat cards */
+.financeStatsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 480px) {
+  .financeStatsGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Transaction card hover */
+.transactionCard {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.transactionCard:hover {
+  transform: translateY(-1px);
+}
+
+/* Dashboard content grids */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .statsGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.contentGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 1024px) {
+  .contentGrid {
+    grid-template-columns: 2fr 1fr;
+  }
+}

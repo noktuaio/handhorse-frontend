@@ -1,0 +1,287 @@
+import type { Horse, HealthRecord, Transaction, ChartDataPoint, AwardRecord } from "./index";
+
+export const MOCK_HORSES: Horse[] = [
+  {
+    id: "1",
+    name: "Trovão",
+    breed: "Quarter Horse",
+    registry: "REG-1001",
+    birthDate: "2018-05-12",
+    gender: "Stallion",
+    coatColor: "Alazão",
+    microchip: "982000411223344",
+    photoUrl:
+      "https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&q=80&w=400",
+    breederId: "breeder-1",
+    currentOwnerId: "owner-1",
+    bookId: "book-open",
+    status: "Active",
+    alive: true,
+    blocked: false,
+    notes: "Garanhão com excelente desempenho reprodutivo.",
+  },
+  {
+    id: "2",
+    name: "Lua",
+    breed: "Arabian",
+    registry: "REG-1002",
+    birthDate: "2019-03-20",
+    gender: "Mare",
+    coatColor: "Tordilha",
+    microchip: "982000411223355",
+    photoUrl:
+      "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&q=80&w=400",
+    breederId: "breeder-2",
+    currentOwnerId: "owner-2",
+    bookId: "book-open",
+    status: "Active",
+    alive: true,
+    blocked: false,
+  },
+  {
+    id: "3",
+    name: "Ventania",
+    breed: "Thoroughbred",
+    registry: "REG-1003",
+    birthDate: "2021-08-15",
+    gender: "Gelding",
+    coatColor: "Castanho",
+    photoUrl:
+      "https://images.unsplash.com/photo-1598974357801-cbca100e65d3?auto=format&fit=crop&q=80&w=400",
+    breederId: "breeder-1",
+    currentOwnerId: "owner-1",
+    bookId: "book-young",
+    status: "Active",
+    sireId: "1",
+    damId: "2",
+    alive: true,
+    blocked: false,
+  },
+  {
+    id: "4",
+    name: "Sultão",
+    breed: "Appaloosa",
+    registry: "REG-1004",
+    birthDate: "2020-11-02",
+    gender: "Stallion",
+    coatColor: "Pampa",
+    photoUrl:
+      "https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&q=80&w=400",
+    breederId: "breeder-3",
+    currentOwnerId: "owner-3",
+    bookId: "book-open",
+    status: "Active",
+    alive: true,
+    blocked: true,
+    notes: "Animal em observação para desbloqueio documental.",
+  },
+  {
+    id: "5",
+    name: "Estrela",
+    breed: "Paint Horse",
+    registry: "REG-1005",
+    birthDate: "2022-04-18",
+    gender: "Mare",
+    coatColor: "Baia",
+    photoUrl:
+      "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&q=80&w=400",
+    breederId: "breeder-2",
+    currentOwnerId: "owner-2",
+    bookId: "book-young",
+    status: "Active",
+    alive: true,
+    blocked: false,
+  },
+];
+
+export const MOCK_HEALTH_RECORDS: HealthRecord[] = [
+  {
+    id: "h1",
+    horseId: "1",
+    date: "2025-03-20",
+    type: "Vaccination",
+    description: "Reforço antirrábico",
+    cost: 120,
+    result: "Aplicação concluída sem intercorrências",
+    labName: "Clínica Equus",
+    validUntil: "2026-03-20",
+  },
+  {
+    id: "h2",
+    horseId: "2",
+    date: "2025-03-22",
+    type: "Vet Visit",
+    description: "Consulta de gestação",
+    cost: 250,
+    result: "Gestação confirmada",
+    labName: "Centro Veterinário Haras Sul",
+  },
+  {
+    id: "h3",
+    horseId: "3",
+    date: "2025-03-25",
+    type: "Deworming",
+    description: "Vermifugação semestral",
+    cost: 80,
+    result: "Dose administrada",
+    validUntil: "2025-09-25",
+  },
+];
+
+export const EXTRA_HEALTH_RECORDS: HealthRecord[] = [
+  { id: "h4", horseId: "4", date: "2025-04-10", type: "Medication", description: "Antibiótico pós-ferimento", cost: 180, result: "Resposta clínica positiva", labName: "Laboratório VetLab" },
+  { id: "h5", horseId: "5", date: "2025-04-02", type: "Vaccination", description: "Vacinação contra influenza equina", cost: 140, validUntil: "2026-04-02" },
+  { id: "h6", horseId: "1", date: "2025-02-15", type: "Vet Visit", description: "Check-up semestral completo", cost: 300, result: "Sem alterações clínicas" },
+  { id: "h7", horseId: "3", date: "2025-01-20", type: "Surgery", description: "Remoção de tumor benigno no casco", cost: 1800, result: "Recuperação acompanhada" },
+  { id: "h8", horseId: "2", date: "2025-01-08", type: "Deworming", description: "Ivermectina — dose semestral", cost: 75, validUntil: "2025-07-08" },
+  { id: "h9", horseId: "4", date: "2025-12-05", type: "Vet Visit", description: "Avaliação locomotora pré-competição", cost: 220, labName: "Clínica Performance Equina" },
+];
+
+export const DASHBOARD_HEALTH_RECORDS: HealthRecord[] = [...MOCK_HEALTH_RECORDS, ...EXTRA_HEALTH_RECORDS];
+
+export const MOCK_TRANSACTIONS: Transaction[] = [
+  {
+    id: "t1",
+    date: "2025-01-05",
+    type: "Expense",
+    category: "Alimentação",
+    description: "Feno de Alfafa Premium",
+    amount: 800,
+  },
+  {
+    id: "t2",
+    date: "2025-01-10",
+    type: "Income",
+    category: "Serviço",
+    description: "Taxa de cobertura – Thunderbolt",
+    amount: 2500,
+  },
+  {
+    id: "t3",
+    date: "2025-02-01",
+    type: "Expense",
+    category: "Saúde",
+    description: "Vacinas e vermifugação",
+    amount: 450,
+  },
+  {
+    id: "t4",
+    date: "2025-02-15",
+    type: "Income",
+    category: "Venda",
+    description: "Potro vendido",
+    amount: 15000,
+  },
+  {
+    id: "t5",
+    date: "2025-03-01",
+    type: "Expense",
+    category: "Infraestrutura",
+    description: "Manutenção dos estábulos",
+    amount: 1200,
+  },
+  {
+    id: "t6",
+    date: "2025-03-10",
+    type: "Income",
+    category: "Serviço",
+    description: "Taxa de cobertura – Storm Rider",
+    amount: 3000,
+  },
+];
+
+export const EXTRA_TRANSACTIONS: Transaction[] = [
+  { id: "t7", date: "2025-03-18", type: "Expense", category: "Alimentação", description: "Suplemento mineral premium", amount: 620, horseId: "2" },
+  { id: "t8", date: "2025-03-22", type: "Income", category: "Serviço", description: "Taxa de cobertura – Lady Luck", amount: 2000 },
+  { id: "t9", date: "2025-04-05", type: "Expense", category: "Infraestrutura", description: "Reforma do cercado elétrico", amount: 950 },
+  { id: "t10", date: "2025-04-12", type: "Income", category: "Serviço", description: "Aluguel de baia – Golden Spirit", amount: 1200 },
+  { id: "t11", date: "2025-04-20", type: "Expense", category: "Saúde", description: "Cirurgia casco – Storm Rider", amount: 1800, horseId: "4" },
+  { id: "t12", date: "2025-05-03", type: "Income", category: "Venda", description: "Venda de potro – Silver Dawn filly", amount: 18000 },
+  { id: "t13", date: "2025-05-10", type: "Expense", category: "Equipamento", description: "Sela e arreios novos", amount: 3400 },
+  { id: "t14", date: "2025-06-01", type: "Expense", category: "Alimentação", description: "Feno e ração mensal", amount: 900 },
+  { id: "t15", date: "2025-06-15", type: "Income", category: "Serviço", description: "Taxa de cobertura – Thunderbolt", amount: 2500 },
+];
+
+export const DASHBOARD_TRANSACTIONS: Transaction[] = [...MOCK_TRANSACTIONS, ...EXTRA_TRANSACTIONS];
+
+export const CHART_DATA: ChartDataPoint[] = [
+  { name: "Jan", value: 4200 },
+  { name: "Fev", value: 3800 },
+  { name: "Mar", value: 5200 },
+  { name: "Abr", value: 4800 },
+  { name: "Mai", value: 6100 },
+  { name: "Jun", value: 5900 },
+  { name: "Jul", value: 7500 },
+];
+
+export const MOCK_AWARD_RECORDS: AwardRecord[] = [
+  {
+    id: "a1",
+    horseId: "1",
+    date: "2026-03-18",
+    category: "Race",
+    title: "Grande Prêmio Velocidade",
+    organization: "Associação Brasileira do Cavalo de Corrida",
+    placement: "1st",
+    prizeValue: 18000,
+    notes: "Melhor tempo da bateria final com vantagem de 1,2s.",
+  },
+  {
+    id: "a2",
+    horseId: "2",
+    date: "2026-02-11",
+    category: "Endurance",
+    title: "Copa Enduro Serra Azul",
+    organization: "Liga Nacional de Enduro Equestre",
+    placement: "2nd",
+    prizeValue: 9500,
+    notes: "Excelente recuperação cardíaca na inspeção final.",
+  },
+  {
+    id: "a3",
+    horseId: "4",
+    date: "2026-01-29",
+    category: "Morphology",
+    title: "Exposição Nacional Appaloosa",
+    organization: "Associação Brasileira dos Criadores de Appaloosa",
+    placement: "Honorable Mention",
+    notes: "Destaque em conformação e padrão racial.",
+  },
+];
+
+export const EXTRA_AWARD_RECORDS: AwardRecord[] = [
+  {
+    id: "a4",
+    horseId: "5",
+    date: "2026-04-21",
+    category: "Breeding",
+    title: "Destaque Genético Nacional",
+    organization: "Associação Brasileira de Criadores",
+    placement: "1st",
+    prizeValue: 12500,
+    notes: "Reconhecimento por desempenho reprodutivo e qualidade de progênie.",
+  },
+  {
+    id: "a5",
+    horseId: "3",
+    date: "2026-03-08",
+    category: "Team Penning",
+    title: "Circuito Nacional Team Penning",
+    organization: "Liga Brasileira Team Penning",
+    placement: "3rd",
+    prizeValue: 6800,
+  },
+  {
+    id: "a6",
+    horseId: "1",
+    date: "2026-02-14",
+    category: "Race",
+    title: "Copa Velocidade do Interior",
+    organization: "Jockey Clube do Centro-Oeste",
+    placement: "2nd",
+    prizeValue: 9100,
+    attachmentUrl: "https://handhorse.com/premiacoes/copa-velocidade.pdf",
+  },
+];
+
+export const DASHBOARD_AWARD_RECORDS: AwardRecord[] = [...MOCK_AWARD_RECORDS, ...EXTRA_AWARD_RECORDS];
