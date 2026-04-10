@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -10,7 +10,7 @@ import { handleResetFormSubmit } from "@/shared/application/auth/reset-form-hand
 
 const PRIMARY_COLOR = "#2563EB";
 
-export default function ResetPasswordPage() {
+function ResetPasswordPageInner() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -348,5 +348,29 @@ export default function ResetPasswordPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#020617",
+            color: "#9CA3AF",
+            fontSize: "0.9rem",
+          }}
+        >
+          Carregando…
+        </div>
+      }
+    >
+      <ResetPasswordPageInner />
+    </Suspense>
   );
 }

@@ -331,17 +331,12 @@
   transform: translateY(-2px);
 }
 
-/* Finances stat cards */
+/* Finances stat cards: 2 col (entradas / saídas), linha seguinte = resultado (full width no TSX) */
 .financeStatsGrid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-}
-
-@media (min-width: 480px) {
-  .financeStatsGrid {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  align-items: stretch;
 }
 
 /* Transaction card hover */

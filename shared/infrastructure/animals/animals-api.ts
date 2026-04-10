@@ -163,6 +163,55 @@ export async function listOwnersApi(): Promise<ApiOwnerRow[]> {
   return parseResponse<ApiOwnerRow[]>(res);
 }
 
+export type SessionMeResponse = {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    profilePhotoS3Key?: string | null;
+    active?: boolean;
+    profileCode: string;
+  };
+  owner: Record<string, unknown> & { id: string; name: string; harasSetupCompleted?: boolean };
+  profilePhotoUrl: string | null;
+  ownerLogoUrl: string | null;
+};
+
+export async function getSessionMeApi(): Promise<SessionMeResponse> {
+  const res = await animalsFetch("/session/me", { method: "GET" });
+  const data = await parseResponse<SessionMeResponse>(res);
+  const u = data?.user as { id?: string; name?: string; email?: string; profileCode?: string } | undefined;
+  const o = data?.owner as { id?: string } | undefined;
+  if (!u?.id || !u?.profileCode || !o?.id) {
+    throw new Error("Resposta de sessão inválida. Verifica se a API animals está atualizada (GET /session/me).");
+  }
+  return data;
+}
+
+export async function presignUserProfilePhotoApi(contentType: string): Promise<PresignS3UploadResponse> {
+  const res = await animalsFetch("/users/me/profile-photo/presign", {
+    method: "POST",
+    body: JSON.stringify({ contentType }),
+  });
+  return parseResponse<PresignS3UploadResponse>(res);
+}
+
+export async function presignOwnerLogoApi(ownerId: string, contentType: string): Promise<PresignS3UploadResponse> {
+  const res = await animalsFetch(`/owners/${encodeURIComponent(ownerId)}/logo/presign`, {
+    method: "POST",
+    body: JSON.stringify({ contentType }),
+  });
+  return parseResponse<PresignS3UploadResponse>(res);
+}
+
+export async function updateOwnerApi(ownerId: string, body: Record<string, unknown>): Promise<unknown> {
+  const res = await animalsFetch(`/owners/${encodeURIComponent(ownerId)}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+  return parseResponse<unknown>(res);
+}
+
 export async function listBooksApi(): Promise<ApiBookRow[]> {
   const res = await animalsFetch("/books", { method: "GET" });
   return parseResponse<ApiBookRow[]>(res);
@@ -188,6 +237,59 @@ export async function listStatusesApi(): Promise<ApiStatusRow[]> {
 export async function listExamTypesApi(): Promise<ApiExamTypeRow[]> {
   const res = await animalsFetch("/exam-types", { method: "GET" });
   return parseResponse<ApiExamTypeRow[]>(res);
+}
+
+/** Ocorrência de lembrete regulatório (associação × animal). */
+export type ApiReminderOccurrenceRow = {
+  id: string;
+  ruleId: string;
+  animalId: string;
+  associationId: string;
+  dueDate: string;
+  status: "pending" | "done" | "skipped";
+  completedAt: string | null;
+  completedByEmail: string | null;
+  proofS3Key: string | null;
+  sourceAnimalExamId: string | null;
+  notes: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  ruleTitle: string;
+  ruleTriggerKind: string;
+  animalName: string;
+};
+
+export type ListReminderOccurrencesParams = {
+  status?: "pending" | "done" | "skipped";
+  dueFrom?: string;
+  dueTo?: string;
+  animalId?: string;
+  limit?: number;
+};
+
+export async function listReminderOccurrencesApi(
+  params: ListReminderOccurrencesParams = {},
+): Promise<ApiReminderOccurrenceRow[]> {
+  const sp = new URLSearchParams();
+  if (params.status) sp.set("status", params.status);
+  if (params.dueFrom) sp.set("dueFrom", params.dueFrom);
+  if (params.dueTo) sp.set("dueTo", params.dueTo);
+  if (params.animalId) sp.set("animalId", params.animalId);
+  if (params.limit != null) sp.set("limit", String(params.limit));
+  const qs = sp.toString();
+  const res = await animalsFetch(`/reminder-occurrences${qs ? `?${qs}` : ""}`, { method: "GET" });
+  return parseResponse<ApiReminderOccurrenceRow[]>(res);
+}
+
+export async function patchReminderOccurrenceApi(
+  id: string,
+  body: { status?: "pending" | "done" | "skipped"; notes?: string | null; proofS3Key?: string | null },
+): Promise<ApiReminderOccurrenceRow> {
+  const res = await animalsFetch(`/reminder-occurrences/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  return parseResponse<ApiReminderOccurrenceRow>(res);
 }
 
 /** Linha `animal_exams` (resposta camelCase). */
@@ -229,6 +331,40 @@ export async function updateAnimalExamApi(
     { method: "PUT", body: JSON.stringify(body) },
   );
   return parseResponse<ApiAnimalExamRow>(res);
+}
+
+export type PresignS3UploadResponse = {
+  uploadUrl: string;
+  key: string;
+  contentType: string;
+};
+
+export async function presignExamAttachmentApi(
+  animalId: string,
+  contentType: string,
+): Promise<PresignS3UploadResponse> {
+  const res = await animalsFetch(
+    `/animals/${encodeURIComponent(animalId)}/exams/attachment/presign`,
+    {
+      method: "POST",
+      body: JSON.stringify({ contentType }),
+    },
+  );
+  return parseResponse<PresignS3UploadResponse>(res);
+}
+
+export async function presignReminderProofApi(
+  occurrenceId: string,
+  contentType: string,
+): Promise<PresignS3UploadResponse> {
+  const res = await animalsFetch(
+    `/reminder-occurrences/${encodeURIComponent(occurrenceId)}/proof/presign`,
+    {
+      method: "POST",
+      body: JSON.stringify({ contentType }),
+    },
+  );
+  return parseResponse<PresignS3UploadResponse>(res);
 }
 
 export async function deleteAnimalExamApi(animalId: string, recordId: string): Promise<void> {
@@ -366,4 +502,191 @@ export async function deleteAnimalAwardApi(animalId: string, recordId: string): 
         : `Falha na requisição (código ${res.status}).`;
     throw new Error(msg);
   }
+}
+
+/** Safari/iOS por vezes deixam `file.type` vazio; o presign e o PUT ao S3 precisam do mesmo content-type. */
+export function imageContentTypeFromFile(file: File): string {
+  const t = file.type?.trim().toLowerCase();
+  if (t === "image/jpeg" || t === "image/png" || t === "image/webp" || t === "image/gif") {
+    return t;
+  }
+  const n = file.name.toLowerCase();
+  if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+const PHOTO_IO_HINT =
+  "Guarde a imagem como ficheiro no disco (ex.: Transferências) e volte a escolher; evite abrir só a pré-visualização da Fototeca/iCloud.";
+
+/**
+ * Safari/WebKit: ficheiros da Fototeca/iCloud falham com "The I/O read operation failed".
+ * FileReader primeiro; depois slice (novo Blob); por último arrayBuffer no File.
+ */
+async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+  const tryFileReader = () =>
+    new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        if (result instanceof ArrayBuffer) {
+          resolve(result);
+          return;
+        }
+        reject(new Error("Leitura da imagem inválida."));
+      };
+      reader.onerror = () => {
+        reject(reader.error ?? new Error("FileReader falhou ao ler o ficheiro."));
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+  const attempts: Array<() => Promise<ArrayBuffer>> = [
+    tryFileReader,
+    () => file.slice(0, file.size).arrayBuffer(),
+    () => file.arrayBuffer(),
+  ];
+
+  let last: unknown;
+  for (const run of attempts) {
+    try {
+      return await run();
+    } catch (e) {
+      last = e;
+    }
+  }
+  const msg = last instanceof Error ? last.message : String(last);
+  throw new Error(`${msg} ${PHOTO_IO_HINT}`);
+}
+
+/** Cópia em memória: o Safari por vezes falha no PUT se o buffer ainda estiver ligado ao Blob/File. */
+function copyFileBytes(ab: ArrayBuffer): ArrayBuffer {
+  const src = new Uint8Array(ab);
+  const dst = new Uint8Array(src.byteLength);
+  dst.set(src);
+  return dst.buffer;
+}
+
+/** Safari (macOS/iOS) tem bugs com `fetch`+corpo binário em PUT cross-origin para S3; XHR é mais fiável. */
+function preferXhrForPresignedPut(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /safari/i.test(ua) && !/chrome|chromium|crios|fxios|edgios|edg\//i.test(ua);
+}
+
+function putPresignedUrlWithXHR(
+  uploadUrl: string,
+  body: ArrayBuffer,
+  contentType: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", contentType);
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      const snippet = (xhr.responseText ?? "").trim().slice(0, 400);
+      reject(
+        new Error(
+          snippet
+            ? `Falha no upload da imagem (${xhr.status}): ${snippet}`
+            : `Falha no upload da imagem (${xhr.status}). Verifique CORS do bucket e permissões S3.`,
+        ),
+      );
+    };
+    xhr.onerror = () => {
+      reject(new Error(`Falha de rede no upload. ${PHOTO_IO_HINT}`));
+    };
+    xhr.send(body);
+  });
+}
+
+/** Upload direto para URL pré-assinada do S3 (sem Authorization do nosso API). */
+export async function putImageToPresignedUrl(
+  uploadUrl: string,
+  file: File,
+  contentType: string,
+): Promise<void> {
+  const raw = await readFileAsArrayBuffer(file);
+  const body = copyFileBytes(raw);
+
+  if (preferXhrForPresignedPut() && typeof XMLHttpRequest !== "undefined") {
+    await putPresignedUrlWithXHR(uploadUrl, body, contentType);
+    return;
+  }
+
+  const runFetch = () =>
+    fetch(uploadUrl, {
+      method: "PUT",
+      body,
+      headers: { "Content-Type": contentType },
+      cache: "no-store",
+    });
+
+  let res: Response;
+  try {
+    res = await runFetch();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const looksLikeIo =
+      /I\/O read operation failed|stream exhausted|Load failed|network error/i.test(msg);
+    if (looksLikeIo && typeof XMLHttpRequest !== "undefined") {
+      await putPresignedUrlWithXHR(uploadUrl, body, contentType);
+      return;
+    }
+    if (/I\/O|stream|read operation/i.test(msg)) {
+      throw new Error(`${msg} ${PHOTO_IO_HINT}`);
+    }
+    throw err instanceof Error ? err : new Error(msg);
+  }
+
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => "")).trim().slice(0, 400);
+    throw new Error(
+      detail
+        ? `Falha no upload da imagem (${res.status}): ${detail}`
+        : `Falha no upload da imagem (${res.status}). Verifique CORS do bucket e permissões S3.`,
+    );
+  }
+}
+
+export type PresignAnimalImageResponse = {
+  uploadUrl: string;
+  fileUrl: string;
+  key: string;
+  contentType: string;
+};
+
+export type AnimalGalleryItem = { key: string; url: string };
+
+export async function presignAnimalMainPhotoApi(
+  animalId: string,
+  contentType: string,
+): Promise<PresignAnimalImageResponse> {
+  const res = await animalsFetch(`/animals/${encodeURIComponent(animalId)}/photo/presign`, {
+    method: "POST",
+    body: JSON.stringify({ contentType }),
+  });
+  return parseResponse<PresignAnimalImageResponse>(res);
+}
+
+export async function presignAnimalGalleryPhotoApi(
+  animalId: string,
+  contentType: string,
+): Promise<PresignAnimalImageResponse> {
+  const res = await animalsFetch(`/animals/${encodeURIComponent(animalId)}/gallery/presign`, {
+    method: "POST",
+    body: JSON.stringify({ contentType }),
+  });
+  return parseResponse<PresignAnimalImageResponse>(res);
+}
+
+export async function listAnimalGalleryApi(animalId: string): Promise<{ items: AnimalGalleryItem[] }> {
+  const res = await animalsFetch(`/animals/${encodeURIComponent(animalId)}/gallery`, { method: "GET" });
+  return parseResponse<{ items: AnimalGalleryItem[] }>(res);
 }

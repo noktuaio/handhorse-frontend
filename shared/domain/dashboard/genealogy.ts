@@ -79,7 +79,7 @@ export function getGenealogySnapshot(selectedHorse: Horse) {
   };
 }
 
-/** Pedigree a partir da lista real de animais (ex.: API / registo). */
+/** Pedigree a partir da lista real de animais (ex.: API / registro). */
 export function getGenealogySnapshotFromHorses(selectedHorse: Horse, allHorses: Horse[]) {
   const byId = new Map(allHorses.map((h) => [h.id, h]));
   const sourceHorse = byId.get(selectedHorse.id) ?? selectedHorse;

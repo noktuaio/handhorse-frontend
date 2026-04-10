@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 type Theme = "light" | "dark";
 
@@ -22,7 +22,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const pageBackgroundColor = isDark ? "#020617" : "#f8fafc";
 
-  if (typeof document !== "undefined") {
+  useEffect(() => {
     const { body } = document;
     body.style.margin = "0";
     body.style.backgroundImage = pageBackground;
@@ -30,7 +30,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     body.style.backgroundRepeat = "no-repeat";
     body.style.backgroundAttachment = "fixed";
     body.style.backgroundSize = "cover";
-  }
+  }, [pageBackground, pageBackgroundColor]);
 
   const value: ThemeContextValue = {
     theme,

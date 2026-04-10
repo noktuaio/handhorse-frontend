@@ -21,6 +21,7 @@ import {
   Upload,
   Pencil,
   Trash2,
+  ArrowLeft,
 } from "lucide-react";
 import { useTheme } from "@/shared/ui/theme-context";
 import { buildHorseHistoryPdfFile } from "@/shared/domain/dashboard/history-pdf";
@@ -29,20 +30,21 @@ import type { Horse } from "@/shared/domain/dashboard/index";
 import {
   createAnimalApi,
   deleteAnimalApi,
+  listAnimalGalleryApi,
   listAnimalsApi,
-  listAwardCatalogApi,
   listBooksApi,
   listBreedersApi,
   listBreedsApi,
-  listExamTypesApi,
   listOwnersApi,
   listStatusesApi,
+  presignAnimalGalleryPhotoApi,
+  presignAnimalMainPhotoApi,
+  putImageToPresignedUrl,
   updateAnimalApi,
-  type ApiAwardCatalogRow,
+  type AnimalGalleryItem,
   type ApiBookRow,
   type ApiBreedRow,
   type ApiBreederRow,
-  type ApiExamTypeRow,
   type ApiOwnerRow,
   type ApiStatusRow,
 } from "@/shared/infrastructure/animals/animals-api";
@@ -131,25 +133,6 @@ function buildEmptyHorse(breederId?: string, bookId?: string): Partial<Horse> {
   };
 }
 
-// ── gallery helpers ───────────────────────────────────────────────────────────
-
-// For each horse we generate 6 gallery images:
-// slot 0 → real photoUrl, slots 1-5 → picsum with horse-themed seeds
-const GALLERY_SEEDS: Record<string, string[]> = {
-  "1": ["horse1a", "horse1b", "horse1c", "horse1d", "horse1e"],
-  "2": ["horse2a", "horse2b", "horse2c", "horse2d", "horse2e"],
-  "3": ["horse3a", "horse3b", "horse3c", "horse3d", "horse3e"],
-  "4": ["horse4a", "horse4b", "horse4c", "horse4d", "horse4e"],
-  "5": ["horse5a", "horse5b", "horse5c", "horse5d", "horse5e"],
-};
-
-function getGallery(horse: Horse): string[] {
-  const extra = (GALLERY_SEEDS[horse.id] ?? ["a","b","c","d","e"]).map(
-    (s) => `https://picsum.photos/seed/${s}/600/400`
-  );
-  return [horse.photoUrl, ...extra];
-}
-
 // ── horse detail modal ────────────────────────────────────────────────────────
 
 type Tab = "dados" | "galeria";
@@ -180,9 +163,41 @@ function HorseModal({
   const [tab, setTab] = useState<Tab>("dados");
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [isExportingHistory, setIsExportingHistory] = useState(false);
-  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [galleryItems, setGalleryItems] = useState<AnimalGalleryItem[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
+  const [galleryUploadBusy, setGalleryUploadBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const gallery = [horse.photoUrl, ...uploadedImages, ...getGallery(horse).slice(1)];
+
+  useScrollLock(!!lightbox);
+
+  const hasCustomMainPhoto = horse.photoUrl && horse.photoUrl !== DEFAULT_PHOTO;
+  const galleryDisplayUrls = [
+    ...(hasCustomMainPhoto ? [horse.photoUrl] : []),
+    ...galleryItems.map((g) => g.url),
+  ];
+
+  useEffect(() => {
+    if (tab !== "galeria") return;
+    let cancelled = false;
+    setGalleryLoading(true);
+    setGalleryError(null);
+    void listAnimalGalleryApi(horse.id)
+      .then((data) => {
+        if (!cancelled) setGalleryItems(data.items);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setGalleryError(err instanceof Error ? err.message : "Não foi possível carregar a galeria.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setGalleryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, horse.id]);
 
   const textColor  = isDark ? "#E5E7EB" : "#0f172a";
   const mutedColor = isDark ? "#9CA3AF" : "#64748b";
@@ -273,51 +288,66 @@ function HorseModal({
     }
   }
 
-  function handleGalleryUpload(event: ChangeEvent<HTMLInputElement>) {
+  async function handleGalleryUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    const objectUrl = URL.createObjectURL(file);
-
-    setUploadedImages((currentImages) => [objectUrl, ...currentImages]);
     event.target.value = "";
+    if (!file) return;
+    const contentType = file.type || "image/jpeg";
+    setGalleryUploadBusy(true);
+    setGalleryError(null);
+    try {
+      const { uploadUrl } = await presignAnimalGalleryPhotoApi(horse.id, contentType);
+      await putImageToPresignedUrl(uploadUrl, file, contentType);
+      const data = await listAnimalGalleryApi(horse.id);
+      setGalleryItems(data.items);
+    } catch (err) {
+      setGalleryError(err instanceof Error ? err.message : "Falha no upload.");
+    } finally {
+      setGalleryUploadBusy(false);
+    }
   }
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        style={{ position: "fixed", inset: 0, zIndex: 100, backgroundColor: "rgba(0,0,0,0.65)", backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)" }}
-        onClick={onClose}
-      />
-
-      {/* Modal */}
       <div
         style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 101,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "16px",
-          pointerEvents: "none",
+          width: "100%",
+          maxWidth: "640px",
+          margin: "0 auto",
+          padding: "0 0 48px",
+          boxSizing: "border-box",
         }}
       >
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            marginBottom: "16px",
+            padding: "10px 14px",
+            borderRadius: "14px",
+            border: `1px solid ${divider}`,
+            background: isDark ? "rgba(255,255,255,0.04)" : "#ffffff",
+            color: textColor,
+            fontSize: "0.85rem",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          <ArrowLeft size={18} aria-hidden />
+          Voltar à lista
+        </button>
+
         <div
           style={{
             ...modalBg,
             width: "100%",
             maxWidth: "560px",
-            maxHeight: "90vh",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            pointerEvents: "auto",
-            animation: "slideUp 0.28s cubic-bezier(.22,.8,.34,1) both",
           }}
         >
           {/* Hero photo */}
@@ -333,15 +363,6 @@ function HorseModal({
             <span style={{ position: "absolute", top: "14px", left: "16px", padding: "4px 12px", borderRadius: "999px", fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", backgroundColor: ss.bg, color: ss.color, backdropFilter: "blur(8px)", border: `1px solid ${ss.color}33` }}>
               {STATUS_PT[horse.status]}
             </span>
-            {/* Close button */}
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Fechar"
-              style={{ position: "absolute", top: "14px", right: "16px", width: "34px", height: "34px", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.25)", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}
-            >
-              <X size={16} />
-            </button>
             {/* Name overlay */}
             <div style={{ position: "absolute", bottom: "14px", left: "16px" }}>
               <h3 style={{ margin: 0, fontSize: "1.4rem", fontWeight: 900, color: "#fff", lineHeight: 1.1 }}>
@@ -505,10 +526,13 @@ function HorseModal({
                 />
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
                   <p style={{ margin: 0, fontSize: "0.75rem", color: mutedColor, fontWeight: 600 }}>
-                    {gallery.length} fotos · toque para ampliar a imagem
+                    {galleryLoading
+                      ? "Carregando…"
+                      : `${galleryDisplayUrls.length} foto(s) · toque para ampliar`}
                   </p>
                   <button
                     type="button"
+                    disabled={galleryUploadBusy || galleryLoading}
                     onClick={() => fileInputRef.current?.click()}
                     style={{
                       display: "inline-flex",
@@ -521,18 +545,29 @@ function HorseModal({
                       color: textColor,
                       fontSize: "0.78rem",
                       fontWeight: 700,
-                      cursor: "pointer",
+                      cursor: galleryUploadBusy || galleryLoading ? "not-allowed" : "pointer",
                       flexShrink: 0,
+                      opacity: galleryUploadBusy || galleryLoading ? 0.65 : 1,
                     }}
                   >
                     <Upload size={14} />
-                    Carregar foto
+                    {galleryUploadBusy ? "Enviando…" : "Adicionar foto"}
                   </button>
                 </div>
+                {galleryError && (
+                  <p style={{ margin: "0 0 10px", fontSize: "0.78rem", color: "#f87171" }} role="alert">
+                    {galleryError}
+                  </p>
+                )}
+                {!galleryLoading && galleryDisplayUrls.length === 0 && !galleryError && (
+                  <p style={{ margin: "0 0 12px", fontSize: "0.82rem", color: mutedColor }}>
+                    Nenhuma foto ainda. Envie a foto principal no cadastro ou adicione imagens aqui.
+                  </p>
+                )}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
-                  {gallery.map((src, i) => (
+                  {galleryDisplayUrls.map((src, i) => (
                     <div
-                      key={i}
+                      key={`${i}-${src.slice(0, 48)}`}
                       onClick={() => setLightbox(src)}
                       style={{
                         borderRadius: "16px",
@@ -609,12 +644,7 @@ export default function RegistryPage() {
   const [books, setBooks] = useState<ApiBookRow[]>([]);
   const [breedsList, setBreedsList] = useState<ApiBreedRow[]>([]);
   const [statuses, setStatuses] = useState<ApiStatusRow[]>([]);
-  const [examTypes, setExamTypes] = useState<ApiExamTypeRow[]>([]);
-  const [awardCatalog, setAwardCatalog] = useState<ApiAwardCatalogRow[]>([]);
   const [initialStatusId, setInitialStatusId] = useState("");
-  /** Apenas consulta no formulário (não enviados no POST do animal). */
-  const [refExamTypeId, setRefExamTypeId] = useState("");
-  const [refAwardCatalogId, setRefAwardCatalogId] = useState("");
   const [loading, setLoading] = useState(true);
   const setNavLoading = useNavLoadingSetter();
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -627,8 +657,44 @@ export default function RegistryPage() {
   const [detailHorse, setDetailHorse] = useState<Horse | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [newHorse, setNewHorse] = useState<Partial<Horse>>(() => buildEmptyHorse());
+  const [pendingMainPhoto, setPendingMainPhoto] = useState<File | null>(null);
+  const [mainPhotoPreviewUrl, setMainPhotoPreviewUrl] = useState<string | null>(null);
+  const mainPhotoInputRef = useRef<HTMLInputElement | null>(null);
 
-  useScrollLock(showModal || !!detailHorse);
+  useEffect(() => {
+    if (!showModal && !detailHorse) return;
+    const id = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showModal, detailHorse]);
+
+  function clearPendingMainPhoto() {
+    if (mainPhotoPreviewUrl) URL.revokeObjectURL(mainPhotoPreviewUrl);
+    setMainPhotoPreviewUrl(null);
+    setPendingMainPhoto(null);
+    if (mainPhotoInputRef.current) mainPhotoInputRef.current.value = "";
+  }
+
+  function handleMainPhotoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (mainPhotoPreviewUrl) {
+      URL.revokeObjectURL(mainPhotoPreviewUrl);
+      setMainPhotoPreviewUrl(null);
+    }
+    if (!file) {
+      setPendingMainPhoto(null);
+      return;
+    }
+    setPendingMainPhoto(file);
+    setMainPhotoPreviewUrl(URL.createObjectURL(file));
+  }
+
+  useEffect(() => {
+    return () => {
+      if (mainPhotoPreviewUrl) URL.revokeObjectURL(mainPhotoPreviewUrl);
+    };
+  }, [mainPhotoPreviewUrl]);
 
   const bookOptions = bookRowsToOptions(books);
 
@@ -668,17 +734,14 @@ export default function RegistryPage() {
       try {
         setLoadError(null);
         setLoading(true);
-        const [animalRows, breederRows, ownerRows, bookRows, breedRows, statusRows, examTypeRows, awardRows] =
-          await Promise.all([
-            listAnimalsApi(),
-            listBreedersApi(),
-            listOwnersApi(),
-            listBooksApi(),
-            listBreedsApi().catch(() => [] as ApiBreedRow[]),
-            listStatusesApi(),
-            listExamTypesApi(),
-            listAwardCatalogApi(),
-          ]);
+        const [animalRows, breederRows, ownerRows, bookRows, breedRows, statusRows] = await Promise.all([
+          listAnimalsApi(),
+          listBreedersApi(),
+          listOwnersApi(),
+          listBooksApi(),
+          listBreedsApi().catch(() => [] as ApiBreedRow[]),
+          listStatusesApi(),
+        ]);
         if (cancelled) return;
         setHorses(animalRows.map(mapApiAnimalToHorse));
         setBreeders(breederRows);
@@ -686,8 +749,6 @@ export default function RegistryPage() {
         setBooks(bookRows);
         setBreedsList(breedRows);
         setStatuses(statusRows);
-        setExamTypes(examTypeRows);
-        setAwardCatalog(awardRows);
       } catch (e) {
         if (!cancelled) {
           setLoadError(e instanceof Error ? e.message : "Não foi possível carregar os dados.");
@@ -757,13 +818,24 @@ export default function RegistryPage() {
     fontWeight: 600,
   };
 
+  const fieldLabel: CSSProperties = {
+    display: "block",
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    color: mutedColor,
+    marginBottom: "6px",
+  };
+
+  const formCardFooterBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(248,250,252,0.98)";
+
   function openEditFromCard(h: Horse) {
     setSaveError(null);
+    clearPendingMainPhoto();
     setEditingId(h.id);
     setNewHorse(horseToFormState(h));
     setInitialStatusId("");
-    setRefExamTypeId("");
-    setRefAwardCatalogId("");
     void reloadBreedsList();
     setShowModal(true);
   }
@@ -800,7 +872,7 @@ export default function RegistryPage() {
     e.preventDefault();
     setSaveError(null);
     if (!newHorse.breedId) {
-      setSaveError("Selecione uma raça no catálogo.");
+      setSaveError("Selecione uma raça.");
       return;
     }
     if (!editingId && !newHorse.name?.trim()) {
@@ -827,22 +899,58 @@ export default function RegistryPage() {
         breedId: newHorse.breedId ?? null,
         breed: newHorse.breed?.trim() || null,
       };
+
+      async function applyMainPhotoUpload(animalId: string, file: File) {
+        const contentType = file.type || "image/jpeg";
+        const { uploadUrl, fileUrl } = await presignAnimalMainPhotoApi(animalId, contentType);
+        await putImageToPresignedUrl(uploadUrl, file, contentType);
+        // A chave S3 é estável (main.{ext}); a URL pública não muda no mesmo formato → o browser cacheia a imagem antiga.
+        // Gravar ?v= na BD força novo fetch sem alterar o objeto no S3.
+        const sep = fileUrl.includes("?") ? "&" : "?";
+        const photoUrlForDb = `${fileUrl}${sep}v=${Date.now()}`;
+        return updateAnimalApi(animalId, { photoUrl: photoUrlForDb });
+      }
+
       if (editingId) {
         const updated = await updateAnimalApi(editingId, payload);
-        const mapped = mapApiAnimalToHorse(updated);
+        let mapped = mapApiAnimalToHorse(updated);
+        if (pendingMainPhoto) {
+          try {
+            const row = await applyMainPhotoUpload(editingId, pendingMainPhoto);
+            mapped = mapApiAnimalToHorse(row);
+          } catch (photoErr) {
+            window.alert(
+              photoErr instanceof Error
+                ? `Dados salvos, mas o upload da foto falhou: ${photoErr.message}`
+                : "Dados salvos, mas o upload da foto falhou.",
+            );
+          }
+        }
         setHorses((prev) => prev.map((h) => (h.id === editingId ? mapped : h)));
       } else {
         const created = await createAnimalApi({
           ...payload,
           ...(initialStatusId ? { initialStatusId } : {}),
         });
-        setHorses((prev) => [...prev, mapApiAnimalToHorse(created)]);
+        let mapped = mapApiAnimalToHorse(created);
+        if (pendingMainPhoto) {
+          try {
+            const row = await applyMainPhotoUpload(created.id, pendingMainPhoto);
+            mapped = mapApiAnimalToHorse(row);
+          } catch (photoErr) {
+            window.alert(
+              photoErr instanceof Error
+                ? `Animal criado, mas o upload da foto falhou: ${photoErr.message}`
+                : "Animal criado, mas o upload da foto falhou.",
+            );
+          }
+        }
+        setHorses((prev) => [...prev, mapped]);
       }
+      clearPendingMainPhoto();
       setShowModal(false);
       setEditingId(null);
       setInitialStatusId("");
-      setRefExamTypeId("");
-      setRefAwardCatalogId("");
       setNewHorse(buildEmptyHorse(breeders[0]?.id, books[0]?.id));
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Erro ao salvar.");
@@ -864,6 +972,7 @@ export default function RegistryPage() {
         }
       `}</style>
 
+      {!showModal && !detailHorse && (
       <div style={{ display: "flex", flexDirection: "column", gap: "28px", paddingBottom: "48px" }}>
 
         {loadError && !loading && (
@@ -886,10 +995,9 @@ export default function RegistryPage() {
             type="button"
             onClick={() => {
               setSaveError(null);
+              clearPendingMainPhoto();
               setEditingId(null);
               setInitialStatusId("");
-              setRefExamTypeId("");
-              setRefAwardCatalogId("");
               setNewHorse(buildEmptyHorse(breeders[0]?.id, books[0]?.id));
               void reloadBreedsList();
               setShowModal(true);
@@ -1035,6 +1143,7 @@ export default function RegistryPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* ── Horse detail modal ── */}
       {detailHorse && (
@@ -1050,11 +1159,10 @@ export default function RegistryPage() {
             const h = detailHorse;
             if (!h) return;
             setSaveError(null);
+            clearPendingMainPhoto();
             setEditingId(h.id);
             setNewHorse(horseToFormState(h));
             setInitialStatusId("");
-            setRefExamTypeId("");
-            setRefAwardCatalogId("");
             setDetailHorse(null);
             void reloadBreedsList();
             setShowModal(true);
@@ -1086,218 +1194,485 @@ export default function RegistryPage() {
         />
       )}
 
-      {/* ── Add horse modal ── */}
+      {/* ── Add / edit horse (full page, not modal) ── */}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-          <div
-            style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "20px",
+            paddingBottom: "48px",
+            maxWidth: "560px",
+            margin: "0 auto",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <button
+            type="button"
+            disabled={saving}
             onClick={() => {
+              if (saving) return;
+              clearPendingMainPhoto();
               setShowModal(false);
               setEditingId(null);
             }}
-          />
-          <div style={{ ...glassDark, position: "relative", width: "100%", maxWidth: "480px", maxHeight: "calc(100vh - 32px)", overflowY: "auto", borderRadius: "28px", padding: "32px", boxSizing: "border-box" }}>
-            <button
-              type="button"
-              onClick={() => {
-                setShowModal(false);
-                setEditingId(null);
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              alignSelf: "flex-start",
+              padding: "10px 14px",
+              borderRadius: "14px",
+              border: `1px solid ${dividerColor}`,
+              background: isDark ? "rgba(255,255,255,0.04)" : "#ffffff",
+              color: textColor,
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              cursor: saving ? "not-allowed" : "pointer",
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            <ArrowLeft size={18} aria-hidden />
+            Voltar à lista
+          </button>
+
+          <div
+            style={{
+              ...glassDark,
+              position: "relative",
+              width: "100%",
+              borderRadius: "28px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              height: "min(calc(100dvh - 248px), 680px)",
+              maxHeight: "min(calc(100dvh - 248px), 680px)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                flexShrink: 0,
+                padding: "22px 24px 16px",
+                borderBottom: `1px solid ${dividerColor}`,
               }}
-              aria-label="Fechar"
-              style={{ position: "absolute", top: "16px", right: "16px", width: "32px", height: "32px", borderRadius: "50%", border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(148,163,184,0.3)"}`, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: mutedColor }}
             >
-              <X size={16} />
-            </button>
+              <h3 style={{ margin: 0, fontSize: "1.35rem", fontWeight: 900, color: textColor }}>
+                {editingId ? "Editar Animal" : "Novo Animal"}
+              </h3>
+            </div>
 
-            <h3 style={{ margin: "0 0 8px", fontSize: "1.4rem", fontWeight: 900, color: textColor }}>
-              {editingId ? "Editar Animal" : "Novo Animal"}
-            </h3>
-            <p style={{ margin: "0 0 20px", fontSize: "0.78rem", lineHeight: 1.45, color: mutedColor }}>
-              Dados carregados da API: {breeders.length} criadores · {books.length} livros · {owners.length}{" "}
-              proprietários · {breedsList.length} raças no catálogo ·{" "}
-              {horses.length} animais (pai/mãe) · {statuses.length} estados cadastrados · {examTypes.length} tipos de
-              exame · {awardCatalog.length} prêmios no catálogo.
-            </p>
-
-            <form onSubmit={handleFormSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <input type="text" required placeholder="Nome do Cavalo" value={newHorse.name} onChange={(e) => patch({ name: e.target.value })} style={inputStyle} />
-
-              <select
-                value={breedCatalogSelectValue}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "") {
-                    patch({ breedId: undefined, breed: "" });
-                  } else {
-                    const row = breedOptionsForSelect.find((b) => b.id === v);
-                    patch({ breedId: v, breed: row?.name ?? "" });
-                  }
-                }}
-                style={inputStyle}
-                aria-label="Raça (catálogo)"
-              >
-                <option value="">Selecione uma raça no catálogo…</option>
-                {breedOptionsForSelect.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                    {b.code ? ` (${b.code})` : ""}
-                  </option>
-                ))}
-              </select>
-
-              {breedOptionsForSelect.length === 0 && (
-                <p style={{ margin: 0, fontSize: "0.78rem", color: mutedColor, lineHeight: 1.4 }}>
-                  Não há raças no catálogo. Cadastre raças na API.
-                </p>
-              )}
-
-              <input type="text" placeholder="Registro" value={newHorse.registry || ""} onChange={(e) => patch({ registry: e.target.value })} style={inputStyle} />
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <select value={newHorse.gender} onChange={(e) => patch({ gender: e.target.value as Horse["gender"] })} style={inputStyle}>
-                  <option value="Stallion">Garanhão</option>
-                  <option value="Mare">Égua</option>
-                  <option value="Gelding">Castrado</option>
-                </select>
-                <input type="date" required value={newHorse.birthDate} onChange={(e) => patch({ birthDate: e.target.value })} style={inputStyle} />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <input type="text" placeholder="Pelagem" value={newHorse.coatColor || ""} onChange={(e) => patch({ coatColor: e.target.value })} style={inputStyle} />
-                <input type="text" placeholder="Microchip" value={newHorse.microchip || ""} onChange={(e) => patch({ microchip: e.target.value })} style={inputStyle} />
-              </div>
-
-              <select value={newHorse.breederId || ""} onChange={(e) => patch({ breederId: e.target.value })} style={inputStyle}>
-                <option value="">Criador (opcional)</option>
-                {breeders.map((breeder) => (
-                  <option key={breeder.id} value={breeder.id}>
-                    {breeder.name}
-                  </option>
-                ))}
-              </select>
-
-              <select value={newHorse.bookId || ""} onChange={(e) => patch({ bookId: e.target.value })} style={inputStyle}>
-                <option value="">Livro (opcional)</option>
-                {bookOptions.map((book) => (
-                  <option key={book.id} value={book.id}>
-                    {book.label}
-                  </option>
-                ))}
-              </select>
-
-              {!editingId && (
-                <select
-                  value={initialStatusId}
-                  onChange={(e) => setInitialStatusId(e.target.value)}
-                  style={inputStyle}
-                >
-                  <option value="">Estado inicial no livro (opcional)</option>
-                  {statuses.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.code}) — {s.group}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <select
-                  value={refExamTypeId}
-                  onChange={(e) => setRefExamTypeId(e.target.value)}
-                  style={inputStyle}
-                  aria-label="Tipos de exame (dados da API)"
-                >
-                  <option value="">Tipo de exame (consulta — {examTypes.length} na base)</option>
-                  {examTypes.map((ex) => (
-                    <option key={ex.id} value={ex.id}>
-                      {ex.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={refAwardCatalogId}
-                  onChange={(e) => setRefAwardCatalogId(e.target.value)}
-                  style={inputStyle}
-                  aria-label="Catálogo de prêmios (dados da API)"
-                >
-                  <option value="">Prêmio ou evento (consulta — {awardCatalog.length} no catálogo)</option>
-                  {awardCatalog.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                      {a.eventName ? ` — ${a.eventName}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <select value={newHorse.sireId || ""} onChange={(e) => patch({ sireId: e.target.value || undefined })} style={inputStyle}>
-                  <option value="">Pai não informado</option>
-                  {horses
-                    .filter((horse) => horse.id !== editingId)
-                    .map((horse) => (
-                      <option key={horse.id} value={horse.id}>
-                        {horse.name}
-                      </option>
-                    ))}
-                </select>
-                <select value={newHorse.damId || ""} onChange={(e) => patch({ damId: e.target.value || undefined })} style={inputStyle}>
-                  <option value="">Mãe não informada</option>
-                  {horses
-                    .filter((horse) => horse.id !== editingId)
-                    .map((horse) => (
-                      <option key={horse.id} value={horse.id}>
-                        {horse.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <select value={newHorse.status} onChange={(e) => patch({ status: e.target.value as Horse["status"] })} style={inputStyle}>
-                <option value="Active">Ativo</option>
-                <option value="Sold">Vendido</option>
-                <option value="Retired">Aposentado</option>
-              </select>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <select value={newHorse.alive === false ? "false" : "true"} onChange={(e) => patch({ alive: e.target.value === "true" })} style={inputStyle}>
-                  <option value="true">Animal vivo</option>
-                  <option value="false">Animal não está vivo</option>
-                </select>
-                <select value={newHorse.blocked ? "true" : "false"} onChange={(e) => patch({ blocked: e.target.value === "true" })} style={inputStyle}>
-                  <option value="false">Cadastro liberado</option>
-                  <option value="true">Cadastro bloqueado</option>
-                </select>
-              </div>
-
-              <textarea placeholder="Observações" value={newHorse.notes || ""} onChange={(e) => patch({ notes: e.target.value })} style={{ ...inputStyle, minHeight: "96px", resize: "vertical" }} />
-
-              {saveError && (
-                <p style={{ margin: 0, fontSize: "0.85rem", color: "#f87171" }} role="alert">
-                  {saveError}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={saving}
+            <form
+              onSubmit={handleFormSubmit}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                flex: 1,
+                minHeight: 0,
+                overflow: "hidden",
+              }}
+            >
+              <div
                 style={{
-                  marginTop: "8px",
-                  width: "100%",
-                  padding: "14px 0",
-                  borderRadius: "16px",
-                  border: "none",
-                  backgroundColor: saving ? "#64748b" : "#2563eb",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: "0.95rem",
-                  cursor: saving ? "not-allowed" : "pointer",
-                  boxShadow: "0 4px 16px rgba(37,99,235,0.35)",
-                  boxSizing: "border-box",
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: "auto",
+                  WebkitOverflowScrolling: "touch",
+                  padding: "20px 24px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
                 }}
               >
-                {saving ? "Salvando…" : editingId ? "Salvar alterações" : "Cadastrar cavalo"}
-              </button>
+                <div>
+                  <label htmlFor="registry-horse-name" style={fieldLabel}>
+                    Nome
+                  </label>
+                  <input
+                    id="registry-horse-name"
+                    type="text"
+                    required
+                    placeholder="Nome do cavalo"
+                    value={newHorse.name}
+                    onChange={(e) => patch({ name: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="registry-horse-breed" style={fieldLabel}>
+                    Raça
+                  </label>
+                  <select
+                    id="registry-horse-breed"
+                    value={breedCatalogSelectValue}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "") {
+                        patch({ breedId: undefined, breed: "" });
+                      } else {
+                        const row = breedOptionsForSelect.find((b) => b.id === v);
+                        patch({ breedId: v, breed: row?.name ?? "" });
+                      }
+                    }}
+                    style={inputStyle}
+                  >
+                    <option value="">Selecione uma raça</option>
+                    {breedOptionsForSelect.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                        {b.code ? ` (${b.code})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {breedOptionsForSelect.length === 0 && (
+                    <p style={{ margin: "8px 0 0", fontSize: "0.78rem", color: mutedColor, lineHeight: 1.4 }}>
+                      Não há raças cadastradas. Cadastre raças na API.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="registry-horse-registry" style={fieldLabel}>
+                    Registro
+                  </label>
+                  <input
+                    id="registry-horse-registry"
+                    type="text"
+                    placeholder="Número ou identificação do registro"
+                    value={newHorse.registry || ""}
+                    onChange={(e) => patch({ registry: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label htmlFor="registry-horse-gender" style={fieldLabel}>
+                      Sexo
+                    </label>
+                    <select
+                      id="registry-horse-gender"
+                      value={newHorse.gender}
+                      onChange={(e) => patch({ gender: e.target.value as Horse["gender"] })}
+                      style={inputStyle}
+                    >
+                      <option value="Stallion">Garanhão</option>
+                      <option value="Mare">Égua</option>
+                      <option value="Gelding">Castrado</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="registry-horse-birth" style={fieldLabel}>
+                      Data de nascimento
+                    </label>
+                    <input
+                      id="registry-horse-birth"
+                      type="date"
+                      required
+                      value={newHorse.birthDate}
+                      onChange={(e) => patch({ birthDate: e.target.value })}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label htmlFor="registry-horse-coat" style={fieldLabel}>
+                      Pelagem
+                    </label>
+                    <input
+                      id="registry-horse-coat"
+                      type="text"
+                      placeholder="Ex.: Alazã, Tordilho…"
+                      value={newHorse.coatColor || ""}
+                      onChange={(e) => patch({ coatColor: e.target.value })}
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="registry-horse-microchip" style={fieldLabel}>
+                      Microchip
+                    </label>
+                    <input
+                      id="registry-horse-microchip"
+                      type="text"
+                      placeholder="Opcional"
+                      value={newHorse.microchip || ""}
+                      onChange={(e) => patch({ microchip: e.target.value })}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="registry-horse-breeder" style={fieldLabel}>
+                    Criador <span style={{ fontWeight: 600, textTransform: "none", letterSpacing: "0" }}>(opcional)</span>
+                  </label>
+                  <select
+                    id="registry-horse-breeder"
+                    value={newHorse.breederId || ""}
+                    onChange={(e) => patch({ breederId: e.target.value })}
+                    style={inputStyle}
+                  >
+                    <option value="">Não informado</option>
+                    {breeders.map((breeder) => (
+                      <option key={breeder.id} value={breeder.id}>
+                        {breeder.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="registry-horse-book" style={fieldLabel}>
+                    Livro <span style={{ fontWeight: 600, textTransform: "none", letterSpacing: "0" }}>(opcional)</span>
+                  </label>
+                  <select
+                    id="registry-horse-book"
+                    value={newHorse.bookId || ""}
+                    onChange={(e) => patch({ bookId: e.target.value })}
+                    style={inputStyle}
+                  >
+                    <option value="">Não informado</option>
+                    {bookOptions.map((book) => (
+                      <option key={book.id} value={book.id}>
+                        {book.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {!editingId && (
+                  <div>
+                    <label htmlFor="registry-horse-initial-status" style={fieldLabel}>
+                      Estado inicial no livro <span style={{ fontWeight: 600, textTransform: "none", letterSpacing: "0" }}>(opcional)</span>
+                    </label>
+                    <select
+                      id="registry-horse-initial-status"
+                      value={initialStatusId}
+                      onChange={(e) => setInitialStatusId(e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="">Não aplicar</option>
+                      {statuses.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.code}) — {s.group}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label htmlFor="registry-horse-sire" style={fieldLabel}>
+                      Pai <span style={{ fontWeight: 600, textTransform: "none", letterSpacing: "0" }}>(opcional)</span>
+                    </label>
+                    <select
+                      id="registry-horse-sire"
+                      value={newHorse.sireId || ""}
+                      onChange={(e) => patch({ sireId: e.target.value || undefined })}
+                      style={inputStyle}
+                    >
+                      <option value="">Não informado</option>
+                      {horses
+                        .filter((horse) => horse.id !== editingId)
+                        .map((horse) => (
+                          <option key={horse.id} value={horse.id}>
+                            {horse.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="registry-horse-dam" style={fieldLabel}>
+                      Mãe <span style={{ fontWeight: 600, textTransform: "none", letterSpacing: "0" }}>(opcional)</span>
+                    </label>
+                    <select
+                      id="registry-horse-dam"
+                      value={newHorse.damId || ""}
+                      onChange={(e) => patch({ damId: e.target.value || undefined })}
+                      style={inputStyle}
+                    >
+                      <option value="">Não informada</option>
+                      {horses
+                        .filter((horse) => horse.id !== editingId)
+                        .map((horse) => (
+                          <option key={horse.id} value={horse.id}>
+                            {horse.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="registry-horse-status" style={fieldLabel}>
+                    Situação cadastral
+                  </label>
+                  <select
+                    id="registry-horse-status"
+                    value={newHorse.status}
+                    onChange={(e) => patch({ status: e.target.value as Horse["status"] })}
+                    style={inputStyle}
+                  >
+                    <option value="Active">Ativo</option>
+                    <option value="Sold">Vendido</option>
+                    <option value="Retired">Aposentado</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label htmlFor="registry-horse-alive" style={fieldLabel}>
+                      Vivo
+                    </label>
+                    <select
+                      id="registry-horse-alive"
+                      value={newHorse.alive === false ? "false" : "true"}
+                      onChange={(e) => patch({ alive: e.target.value === "true" })}
+                      style={inputStyle}
+                    >
+                      <option value="true">Sim</option>
+                      <option value="false">Não</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="registry-horse-blocked" style={fieldLabel}>
+                      Cadastro bloqueado
+                    </label>
+                    <select
+                      id="registry-horse-blocked"
+                      value={newHorse.blocked ? "true" : "false"}
+                      onChange={(e) => patch({ blocked: e.target.value === "true" })}
+                      style={inputStyle}
+                    >
+                      <option value="false">Não (liberado)</option>
+                      <option value="true">Sim</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="registry-horse-notes" style={fieldLabel}>
+                    Observações
+                  </label>
+                  <textarea
+                    id="registry-horse-notes"
+                    placeholder="Notas livres sobre o animal…"
+                    value={newHorse.notes || ""}
+                    onChange={(e) => patch({ notes: e.target.value })}
+                    style={{ ...inputStyle, minHeight: "88px", resize: "vertical" }}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="registry-horse-photo" style={fieldLabel}>
+                    Foto principal
+                  </label>
+                  <input
+                    id="registry-horse-photo"
+                    ref={mainPhotoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleMainPhotoChange}
+                    style={{ fontSize: "0.85rem", width: "100%", color: textColor }}
+                  />
+                  <div
+                    style={{
+                      marginTop: "10px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "14px",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    {mainPhotoPreviewUrl ||
+                    (newHorse.photoUrl && newHorse.photoUrl !== DEFAULT_PHOTO) ? (
+                      <img
+                        src={
+                          mainPhotoPreviewUrl ??
+                          (newHorse.photoUrl && newHorse.photoUrl !== DEFAULT_PHOTO
+                            ? newHorse.photoUrl
+                            : "")
+                        }
+                        alt=""
+                        style={{
+                          width: 128,
+                          height: 96,
+                          objectFit: "cover",
+                          borderRadius: "14px",
+                          border: `1px solid ${dividerColor}`,
+                        }}
+                      />
+                    ) : (
+                      <div
+                        role="img"
+                        aria-label="Nenhuma foto selecionada"
+                        style={{
+                          width: 128,
+                          height: 96,
+                          borderRadius: "14px",
+                          border: `1px dashed ${dividerColor}`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: isDark ? "rgba(255,255,255,0.03)" : "rgba(148,163,184,0.08)",
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        <ImageIcon size={28} color={mutedColor} aria-hidden />
+                      </div>
+                    )}
+                    {pendingMainPhoto && (
+                      <button
+                        type="button"
+                        onClick={() => clearPendingMainPhoto()}
+                        style={{ ...cardFooterBtn, fontSize: "0.78rem", color: mutedColor }}
+                      >
+                        Cancelar imagem nova
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: "16px 24px 20px",
+                  borderTop: `1px solid ${dividerColor}`,
+                  background: formCardFooterBg,
+                }}
+              >
+                {saveError && (
+                  <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "#f87171" }} role="alert">
+                    {saveError}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={saving}
+                  style={{
+                    width: "100%",
+                    padding: "14px 0",
+                    borderRadius: "16px",
+                    border: "none",
+                    backgroundColor: saving ? "#64748b" : "#2563eb",
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: "0.95rem",
+                    cursor: saving ? "not-allowed" : "pointer",
+                    boxShadow: "0 4px 16px rgba(37,99,235,0.35)",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  {saving ? "Salvando…" : editingId ? "Salvar alterações" : "Cadastrar cavalo"}
+                </button>
+              </div>
             </form>
           </div>
         </div>

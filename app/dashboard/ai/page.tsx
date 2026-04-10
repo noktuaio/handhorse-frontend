@@ -145,7 +145,7 @@ const DEFAULT_INSIGHT: Insight = {
     "Cólicas por distúrbios digestivos — manejo alimentar cuidadoso.",
   ],
   diet: "Dieta balanceada com feno de gramíneas como base. Suplementação mineral conforme avaliação veterinária. Acesso contínuo à água potável.",
-  estimatedValue: "A consultar",
+  estimatedValue: "Sob consulta",
   breedingMatch: [],
 };
 

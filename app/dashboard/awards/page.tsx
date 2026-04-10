@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type CSSProperties,
   type FormEvent,
 } from "react";
@@ -21,6 +22,7 @@ import {
   Pencil,
   Trash2,
   Building2,
+  ArrowLeft,
 } from "lucide-react";
 import { useTheme } from "@/shared/ui/theme-context";
 import { mapApiAnimalToHorse } from "@/shared/domain/dashboard/map-api-animal";
@@ -86,7 +88,7 @@ function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-/** Nome no catálogo quando o utilizador deixa o título em branco (API exige `name`). */
+/** Nome no catálogo quando o usuário deixa o título em branco (API exige `name`). */
 const DEFAULT_AWARD_CATALOG_NAME = "Premiação (sem título)";
 
 const MAX_PRIZE_DIGITS = 14;
@@ -180,7 +182,15 @@ export default function AwardsPage() {
   const [showFilter, setShowFilter] = useState(false);
   const setNavLoading = useNavLoadingSetter();
 
-  useScrollLock(showModal || showFilter);
+  useScrollLock(showFilter);
+
+  useEffect(() => {
+    if (!showModal) return;
+    const id = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showModal]);
 
   const refreshRecords = useCallback(async () => {
     const cat = await listAwardCatalogApi();
@@ -236,8 +246,16 @@ export default function AwardsPage() {
     .filter((r) => filterHorse === "all" || r.animalId === filterHorse)
     .filter((r) => filterCategory === "all" || r.category === filterCategory);
 
-  const totalPrizeValue = records.reduce((sum, r) => sum + (r.prizeValue ?? 0), 0);
-  const firstPlaces = records.filter((r) => r.placement === "1st").length;
+  const topAnimalsByAwards = useMemo(() => {
+    const byId = new Map<string, { animalId: string; name: string; count: number }>();
+    for (const r of records) {
+      const prev = byId.get(r.animalId);
+      if (prev) prev.count += 1;
+      else byId.set(r.animalId, { animalId: r.animalId, name: r.horseName, count: 1 });
+    }
+    return [...byId.values()].sort((a, b) => b.count - a.count).slice(0, 3);
+  }, [records]);
+
   const activeCount = (filterHorse !== "all" ? 1 : 0) + (filterCategory !== "all" ? 1 : 0);
 
   const glass: CSSProperties = {
@@ -377,8 +395,15 @@ export default function AwardsPage() {
     }
   }
 
+  function closeAwardForm() {
+    if (saving) return;
+    setShowModal(false);
+    setEditingRecord(null);
+  }
+
   return (
     <>
+      {!showModal && (
       <div style={{ display: "flex", flexDirection: "column", gap: "28px", paddingBottom: "48px" }}>
         {loadError && !loading && (
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#f87171" }} role="alert">
@@ -431,58 +456,121 @@ export default function AwardsPage() {
 
         {!loading && horses.length === 0 && (
           <p style={{ margin: 0, fontSize: "0.9rem", color: mutedColor }}>
-            Cadastre animais no registo para registar premiações.
+            Cadastre animais no registro para registrar premiações.
           </p>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
-          {[
-            { label: "Premiações", value: String(records.length), color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
-            { label: "1º lugares", value: String(firstPlaces), color: "#10b981", bg: "rgba(16,185,129,0.12)" },
-            { label: "Valor em prémios", value: formatBRL(totalPrizeValue), color: "#8b5cf6", bg: "rgba(139,92,246,0.12)" },
-          ].map(({ label, value, color, bg }) => (
-            <div key={label} style={{ ...glass, padding: "16px 14px" }}>
+        <div
+          style={{
+            ...glass,
+            padding: "16px 14px",
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+          }}
+        >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
               <div
                 style={{
                   width: "32px",
                   height: "32px",
                   borderRadius: "10px",
-                  backgroundColor: bg,
+                  backgroundColor: "rgba(16,185,129,0.12)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  marginBottom: "10px",
+                  flexShrink: 0,
                 }}
               >
-                <Trophy size={16} color={color} />
+                <Medal size={16} color="#10b981" />
               </div>
-              <p
-                style={{
-                  margin: "0 0 2px",
-                  fontSize: "0.55rem",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.1em",
-                  color: mutedColor,
-                }}
-              >
-                {label}
+              <div style={{ minWidth: 0 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.55rem",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    color: mutedColor,
+                  }}
+                >
+                  Mais premiados
+                </p>
+                <p style={{ margin: "2px 0 0", fontSize: "0.78rem", fontWeight: 600, color: textColor }}>
+                  Top 3 animais
+                </p>
+              </div>
+            </div>
+            {topAnimalsByAwards.length === 0 ? (
+              <p style={{ margin: 0, fontSize: "0.82rem", color: mutedColor, lineHeight: 1.4 }}>
+                Ainda não há premiações registadas por animal.
               </p>
-              <p
+            ) : (
+              <ul
                 style={{
                   margin: 0,
-                  fontSize: "1rem",
-                  fontWeight: 900,
-                  color: textColor,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  padding: 0,
+                  listStyle: "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0",
                 }}
               >
-                {value}
-              </p>
-            </div>
-          ))}
+                {topAnimalsByAwards.map((row, index) => (
+                  <li
+                    key={row.animalId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "10px 0",
+                      borderTop: index === 0 ? "none" : `1px solid ${dividerColor}`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.85rem",
+                        fontWeight: 900,
+                        color: index === 0 ? "#f59e0b" : index === 1 ? "#94a3b8" : "#b45309",
+                        width: "22px",
+                        flexShrink: 0,
+                      }}
+                      aria-hidden
+                    >
+                      {index + 1}º
+                    </span>
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: "0.88rem",
+                        fontWeight: 700,
+                        color: textColor,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {row.name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        color: mutedColor,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {row.count} {row.count === 1 ? "premiação" : "premiações"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -1083,63 +1171,55 @@ export default function AwardsPage() {
           </div>
         </div>
       </div>
+      )}
 
       {showModal && (
         <div
           style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 100,
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "16px",
+            flexDirection: "column",
+            gap: "20px",
+            paddingBottom: "48px",
+            maxWidth: "520px",
+            margin: "0 auto",
+            width: "100%",
+            boxSizing: "border-box",
           }}
         >
-          <div
+          <button
+            type="button"
+            disabled={saving}
+            onClick={closeAwardForm}
             style={{
-              position: "absolute",
-              inset: 0,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              backdropFilter: "blur(6px)",
-              WebkitBackdropFilter: "blur(6px)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              alignSelf: "flex-start",
+              padding: "10px 14px",
+              borderRadius: "14px",
+              border: `1px solid ${dividerColor}`,
+              background: isDark ? "rgba(255,255,255,0.04)" : "#ffffff",
+              color: textColor,
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              cursor: saving ? "not-allowed" : "pointer",
+              opacity: saving ? 0.7 : 1,
             }}
-            onClick={() => !saving && setShowModal(false)}
-          />
+          >
+            <ArrowLeft size={18} aria-hidden />
+            Voltar à lista
+          </button>
+
           <div
             style={{
               ...glassDark,
               position: "relative",
               width: "100%",
-              maxWidth: "480px",
               borderRadius: "28px",
               padding: "32px",
               boxSizing: "border-box",
             }}
           >
-            <button
-              type="button"
-              onClick={() => !saving && setShowModal(false)}
-              aria-label="Fechar"
-              style={{
-                position: "absolute",
-                top: "16px",
-                right: "16px",
-                width: "32px",
-                height: "32px",
-                borderRadius: "50%",
-                border: `1px solid ${dividerColor}`,
-                background: "transparent",
-                cursor: saving ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: mutedColor,
-              }}
-            >
-              <X size={16} />
-            </button>
-
             <h3 style={{ margin: "0 0 24px", fontSize: "1.4rem", fontWeight: 900, color: textColor }}>
               {editingRecord ? "Editar premiação" : "Nova premiação"}
             </h3>

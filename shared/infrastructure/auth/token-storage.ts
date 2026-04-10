@@ -37,7 +37,7 @@ export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS);
 }
 
-/** ID token (claims como `email`); preferir em APIs que resolvem o utilizador pelo JWT. */
+/** ID token (claims como `email`); preferir em APIs que resolvem o usuário pelo JWT. */
 export function getIdToken(): string | null {
   if (!isBrowser()) return null;
   return localStorage.getItem(ID_TOKEN);

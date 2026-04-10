@@ -14,6 +14,7 @@ import {
   Wallet,
   Pencil,
   Trash2,
+  ArrowLeft,
 } from "lucide-react";
 import {
   BarChart,
@@ -103,7 +104,15 @@ export default function FinancesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newTrans, setNewTrans] = useState<Partial<Transaction>>(EMPTY_TRANS);
 
-  useScrollLock(showModal || showFilter);
+  useScrollLock(showFilter);
+
+  useEffect(() => {
+    if (!showModal) return;
+    const id = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showModal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -271,7 +280,7 @@ export default function FinancesPage() {
         }
         closeModal();
       } catch (err) {
-        window.alert(err instanceof Error ? err.message : "Não foi possível guardar o lançamento.");
+        window.alert(err instanceof Error ? err.message : "Não foi possível salvar o lançamento.");
       } finally {
         setSaving(false);
       }
@@ -304,6 +313,7 @@ export default function FinancesPage() {
 
   return (
     <>
+      {!showModal && (
       <div style={{ display: "flex", flexDirection: "column", gap: "28px", paddingBottom: "48px" }}>
         {loadError && !loading && (
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#f87171" }} role="alert">
@@ -353,53 +363,159 @@ export default function FinancesPage() {
           </button>
         </div>
 
-        {/* ── Stat cards ── */}
+        {/* ── Stat cards: entradas + saídas na mesma linha; resultado em baixo com ícone à esquerda (mais compacto) ── */}
         <div className={styles.financeStatsGrid}>
-          {[
-            {
-              label: "Entradas",
-              value: formatBRL(totalIncome),
-              color: "#10b981",
-              bg: "rgba(16,185,129,0.12)",
-              Icon: ArrowUpRight,
-              border: "transparent",
-            },
-            {
-              label: "Saídas",
-              value: formatBRL(totalExpense),
-              color: "#f43f5e",
-              bg: "rgba(244,63,94,0.12)",
-              Icon: ArrowDownRight,
-              border: "transparent",
-            },
-            {
-              label: "Resultado",
-              value: formatBRL(balance),
-              color: balance >= 0 ? "#3b82f6" : "#f43f5e",
-              bg: balance >= 0 ? "rgba(59,130,246,0.12)" : "rgba(244,63,94,0.12)",
-              Icon: TrendingUp,
-              border: balance >= 0 ? "rgba(16,185,129,0.2)" : "rgba(244,63,94,0.2)",
-            },
-          ].map(({ label, value, color, bg, Icon, border }) => (
+          <div
+            style={{
+              ...glass,
+              padding: "20px",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(148,163,184,0.2)"}`,
+            }}
+          >
             <div
-              key={label}
               style={{
-                ...glass,
-                padding: "20px",
-                border: `1px solid ${border === "transparent" ? (isDark ? "rgba(255,255,255,0.1)" : "rgba(148,163,184,0.2)") : border}`,
+                width: "44px",
+                height: "44px",
+                borderRadius: "14px",
+                backgroundColor: "rgba(16,185,129,0.12)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: "14px",
               }}
             >
-              <div style={{ width: "44px", height: "44px", borderRadius: "14px", backgroundColor: bg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "14px" }}>
-                <Icon size={22} color={color} />
-              </div>
-              <p style={{ margin: "0 0 4px", fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: mutedColor }}>
-                {label}
+              <ArrowUpRight size={22} color="#10b981" />
+            </div>
+            <p
+              style={{
+                margin: "0 0 4px",
+                fontSize: "0.62rem",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: mutedColor,
+              }}
+            >
+              Entradas
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "1.2rem",
+                fontWeight: 900,
+                color: "#10b981",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {formatBRL(totalIncome)}
+            </p>
+          </div>
+
+          <div
+            style={{
+              ...glass,
+              padding: "20px",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(148,163,184,0.2)"}`,
+            }}
+          >
+            <div
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "14px",
+                backgroundColor: "rgba(244,63,94,0.12)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: "14px",
+              }}
+            >
+              <ArrowDownRight size={22} color="#f43f5e" />
+            </div>
+            <p
+              style={{
+                margin: "0 0 4px",
+                fontSize: "0.62rem",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: mutedColor,
+              }}
+            >
+              Saídas
+            </p>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "1.2rem",
+                fontWeight: 900,
+                color: "#f43f5e",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {formatBRL(totalExpense)}
+            </p>
+          </div>
+
+          <div
+            style={{
+              ...glass,
+              gridColumn: "1 / -1",
+              padding: "14px 20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+              border: `1px solid ${
+                balance >= 0 ? "rgba(16,185,129,0.2)" : "rgba(244,63,94,0.2)"
+              }`,
+            }}
+          >
+            <div
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "14px",
+                backgroundColor: balance >= 0 ? "rgba(59,130,246,0.12)" : "rgba(244,63,94,0.12)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <TrendingUp size={22} color={balance >= 0 ? "#3b82f6" : "#f43f5e"} />
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p
+                style={{
+                  margin: "0 0 2px",
+                  fontSize: "0.62rem",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  color: mutedColor,
+                }}
+              >
+                Resultado
               </p>
-              <p style={{ margin: 0, fontSize: "1.2rem", fontWeight: 900, color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {value}
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "1.25rem",
+                  fontWeight: 900,
+                  color: balance >= 0 ? "#3b82f6" : "#f43f5e",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {formatBRL(balance)}
               </p>
             </div>
-          ))}
+          </div>
         </div>
 
         {/* ── Bar chart ── */}
@@ -816,27 +932,49 @@ export default function FinancesPage() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* ── Add transaction modal ── */}
+      {/* ── Add / edit transaction (full page, not modal) ── */}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-          {/* Backdrop */}
-          <div
-            style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
-            onClick={closeModal}
-          />
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "20px",
+            paddingBottom: "48px",
+            maxWidth: "520px",
+            margin: "0 auto",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              if (!saving) closeModal();
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              alignSelf: "flex-start",
+              padding: "10px 14px",
+              borderRadius: "14px",
+              border: `1px solid ${dividerColor}`,
+              background: isDark ? "rgba(255,255,255,0.04)" : "#ffffff",
+              color: textColor,
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              cursor: saving ? "not-allowed" : "pointer",
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            <ArrowLeft size={18} aria-hidden />
+            Voltar aos lançamentos
+          </button>
 
-          {/* Card */}
-          <div style={{ ...glassDark, position: "relative", width: "100%", maxWidth: "480px", borderRadius: "28px", padding: "32px", boxSizing: "border-box" }}>
-            <button
-              type="button"
-              onClick={closeModal}
-              aria-label="Fechar"
-              style={{ position: "absolute", top: "16px", right: "16px", width: "32px", height: "32px", borderRadius: "50%", border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(148,163,184,0.3)"}`, background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: mutedColor }}
-            >
-              <X size={16} />
-            </button>
-
+          <div style={{ ...glassDark, position: "relative", width: "100%", borderRadius: "28px", padding: "32px", boxSizing: "border-box" }}>
             <h3 style={{ margin: "0 0 24px", fontSize: "1.4rem", fontWeight: 900, color: textColor }}>
               {editingId ? "Editar lançamento" : "Nova transação"}
             </h3>
@@ -951,7 +1089,7 @@ export default function FinancesPage() {
                   transition: "background 0.2s",
                 }}
               >
-                {saving ? "A guardar…" : editingId ? "Salvar alterações" : "Confirmar lançamento"}
+                {saving ? "Salvando…" : editingId ? "Salvar alterações" : "Confirmar lançamento"}
               </button>
             </form>
           </div>

@@ -9,13 +9,15 @@ import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import Link from "next/link";
 import {
   Activity,
+  Bell,
   Check,
   ChevronDown,
   CreditCard,
   HeartPulse,
-  Sparkles,
+  Trophy,
 } from "lucide-react";
 import {
   AreaChart,
@@ -25,6 +27,10 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 import { useTheme } from "@/shared/ui/theme-context";
 import { mapApiAnimalToHorse } from "@/shared/domain/dashboard/map-api-animal";
@@ -32,7 +38,14 @@ import type { Transaction } from "@/shared/domain/dashboard/index";
 import {
   listAnimalsApi,
   listExamTypesApi,
+  listReminderOccurrencesApi,
+  listAwardCatalogApi,
+  type ApiReminderOccurrenceRow,
 } from "@/shared/infrastructure/animals/animals-api";
+import {
+  loadAwardListItems,
+  type AwardListItem,
+} from "@/shared/infrastructure/animals/awards-mappers";
 import { listFinancialTransactionsApi } from "@/shared/infrastructure/finance/finance-api";
 import {
   loadExamRowsForHorses,
@@ -40,6 +53,7 @@ import {
   type ExamRowWithHorse,
 } from "@/shared/infrastructure/animals/exams-aggregate";
 import styles from "./shell.module.css";
+import { useDashboardSession } from "./session-context";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -81,6 +95,23 @@ function transactionInRange(t: Transaction, start: Date, end: Date): boolean {
   if (!d) return false;
   return d >= start && d <= end;
 }
+
+function dayInRange(dateStr: string, start: Date, end: Date): boolean {
+  const d = parseTransactionDay(dateStr);
+  if (!d) return false;
+  return d >= start && d <= end;
+}
+
+const PROCEDURE_PIE_COLORS = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ec4899",
+  "#06b6d4",
+  "#f43f5e",
+  "#64748b",
+];
 
 type FinancePeriodPreset = "last12" | "currentYear" | "currentMonth" | "last30" | "last7";
 
@@ -187,55 +218,104 @@ function formatDate(iso: string): string {
   return new Date(`${day}T12:00:00`).toLocaleDateString("pt-BR");
 }
 
-function BirthRegistrationIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M7 4.5H14L18 8.5V18.5C18 19.0523 17.5523 19.5 17 19.5H7C6.44772 19.5 6 19.0523 6 18.5V5.5C6 4.94772 6.44772 4.5 7 4.5Z" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M14 4.5V8.5H18" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M9 12H15" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round"/>
-      <path d="M12 9V15" stroke="#f59e0b" strokeWidth="1.8" strokeLinecap="round"/>
-    </svg>
-  );
+function isoAddDays(days: number): string {
+  const n = new Date();
+  n.setDate(n.getDate() + days);
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+
+function reminderTriggerLabel(kind: string): string {
+  switch (kind) {
+    case "animal_birth":
+      return "Comunicação ao nascimento";
+    case "animal_registration":
+      return "Prazo de registro";
+    case "exam_completed":
+      return "Após exame";
+    default:
+      return kind;
+  }
 }
 
 // ── component ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { theme } = useTheme();
+  const { session } = useDashboardSession();
   const isDark = theme === "dark";
+  const harasOverviewSubtitle =
+    session?.owner?.name?.trim() != null && session.owner.name.trim() !== ""
+      ? `Visão geral do haras ${session.owner.name.trim()}`
+      : "Visão geral do haras";
+  const ownerLogoUrl = session?.ownerLogoUrl?.trim() || null;
+  const harasNameForAlt = session?.owner?.name?.trim() || "haras";
 
   const [horseCount, setHorseCount] = useState<number | null>(null);
   const [agendaLoading, setAgendaLoading] = useState(true);
   const [agendaExams, setAgendaExams] = useState<ExamRowWithHorse[]>([]);
+  const [dashboardExams, setDashboardExams] = useState<ExamRowWithHorse[]>([]);
+  const [dashboardAwards, setDashboardAwards] = useState<AwardListItem[]>([]);
+  const [regulatoryReminders, setRegulatoryReminders] = useState<ApiReminderOccurrenceRow[]>([]);
   const [financeLoading, setFinanceLoading] = useState(true);
   const [financeTransactions, setFinanceTransactions] = useState<Transaction[]>([]);
   const [financePeriodPreset, setFinancePeriodPreset] = useState<FinancePeriodPreset>("currentYear");
   const [periodMenu, setPeriodMenu] = useState<{
     top: number;
     left: number;
-    anchor: "finance" | "chart";
+    anchor: "finance" | "chart" | "health" | "awards";
   } | null>(null);
   const periodMenuRef = useRef<HTMLDivElement | null>(null);
   const financePeriodBtnRef = useRef<HTMLButtonElement | null>(null);
   const chartPeriodBtnRef = useRef<HTMLButtonElement | null>(null);
+  const healthPeriodBtnRef = useRef<HTMLButtonElement | null>(null);
+  const awardsPeriodBtnRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setAgendaLoading(true);
-        const [animalRows, types] = await Promise.all([listAnimalsApi(), listExamTypesApi()]);
+        const [animalRows, types, reminders] = await Promise.all([
+          listAnimalsApi(),
+          listExamTypesApi(),
+          listReminderOccurrencesApi({
+            status: "pending",
+            dueFrom: isoAddDays(-730),
+            dueTo: isoAddDays(730),
+            limit: 20,
+          }).catch(() => [] as ApiReminderOccurrenceRow[]),
+        ]);
         if (cancelled) return;
         const horses = animalRows.map(mapApiAnimalToHorse);
         const typeMap = new Map(types.map((t) => [t.id, t.name]));
         const allExams = await loadExamRowsForHorses(horses, typeMap);
         const upcoming = pickUpcomingExamRows(allExams, 3);
         setHorseCount(horses.length);
+        setDashboardExams(allExams);
         setAgendaExams(upcoming);
+        try {
+          const catalog = await listAwardCatalogApi();
+          const catalogById = new Map(catalog.map((a) => [a.id, a]));
+          const awardItems = await loadAwardListItems(
+            horses.map((h) => ({ id: h.id, name: h.name })),
+            catalogById,
+          );
+          if (!cancelled) setDashboardAwards(awardItems);
+        } catch {
+          if (!cancelled) setDashboardAwards([]);
+        }
+        const sorted = [...reminders].sort(
+          (a, b) =>
+            new Date(`${a.dueDate}T12:00:00`).getTime() - new Date(`${b.dueDate}T12:00:00`).getTime(),
+        );
+        setRegulatoryReminders(sorted.slice(0, 8));
       } catch {
         if (!cancelled) {
           setHorseCount(null);
           setAgendaExams([]);
+          setDashboardExams([]);
+          setDashboardAwards([]);
+          setRegulatoryReminders([]);
         }
       } finally {
         if (!cancelled) setAgendaLoading(false);
@@ -282,8 +362,40 @@ export default function DashboardPage() {
   const chartData = buildPerformanceChartData(financeFiltered, granularity);
   const periodPillLabel = periodIndicatorLabel(financePeriodPreset, new Date());
 
+  const examsInPeriod = useMemo(
+    () =>
+      dashboardExams.filter((row) => dayInRange(row.examDate, periodBounds.start, periodBounds.end)),
+    [dashboardExams, periodBounds.start, periodBounds.end],
+  );
+
+  const proceduresPieData = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of examsInPeriod) {
+      const label = row.examTypeName?.trim() || "Outro";
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [examsInPeriod]);
+
+  const awardsInPeriod = useMemo(
+    () =>
+      dashboardAwards.filter((row) => dayInRange(row.date, periodBounds.start, periodBounds.end)),
+    [dashboardAwards, periodBounds.start, periodBounds.end],
+  );
+
+  const awardsByAnimalRows = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const row of awardsInPeriod) {
+      const label = row.horseName?.trim() || "Animal";
+      m.set(label, (m.get(label) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [awardsInPeriod]);
+
   const openOrTogglePeriodMenu = useCallback(
-    (anchor: "finance" | "chart") => (e: ReactMouseEvent<HTMLButtonElement>) => {
+    (anchor: "finance" | "chart" | "health" | "awards") => (e: ReactMouseEvent<HTMLButtonElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
       const menuWidth = 240;
       let left = r.left;
@@ -307,6 +419,8 @@ export default function DashboardPage() {
         if (periodMenuRef.current?.contains(t)) return;
         if (financePeriodBtnRef.current?.contains(t)) return;
         if (chartPeriodBtnRef.current?.contains(t)) return;
+        if (healthPeriodBtnRef.current?.contains(t)) return;
+        if (awardsPeriodBtnRef.current?.contains(t)) return;
         setPeriodMenu(null);
       };
       document.addEventListener("mousedown", onDown);
@@ -348,6 +462,7 @@ export default function DashboardPage() {
 
   const textColor = isDark ? "#E5E7EB" : "#0f172a";
   const mutedColor = isDark ? "#9CA3AF" : "#64748b";
+  const dividerColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(148,163,184,0.18)";
   const subBg = isDark ? "rgba(255,255,255,0.05)" : "rgba(15,23,42,0.04)";
 
   const financials = [
@@ -368,13 +483,16 @@ export default function DashboardPage() {
   };
 
   const agendaItems = [
-    {
-      id: "birth-registration",
-      title: "Registro de nascimento na associação",
-      subtitle: "Potro Aurora · Prazo até 25/06/2026",
-      iconBg: "rgba(245,158,11,0.14)",
-      icon: <BirthRegistrationIcon />,
-    },
+    ...(agendaLoading
+      ? []
+      : regulatoryReminders.map((rec) => ({
+          id: `reminder-${rec.id}`,
+          title: rec.ruleTitle,
+          subtitle: `${rec.animalName} · Vence ${formatDate(rec.dueDate)} · ${reminderTriggerLabel(rec.ruleTriggerKind)}`,
+          iconBg: "rgba(245,158,11,0.14)",
+          icon: <Bell size={18} color="#f59e0b" aria-hidden />,
+          href: "/dashboard/reminders" as const,
+        }))),
     ...(agendaLoading
       ? []
       : agendaExams.map((rec) => {
@@ -385,6 +503,7 @@ export default function DashboardPage() {
             subtitle: `${rec.examTypeName} · ${formatDate(ref)}`,
             iconBg: "rgba(244,63,94,0.12)",
             icon: <HeartPulse size={18} color="#f43f5e" />,
+            href: undefined as undefined,
           };
         })),
   ];
@@ -396,41 +515,64 @@ export default function DashboardPage() {
         <h2 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 900, letterSpacing: "-0.03em", color: textColor }}>
           Painel de Controle
         </h2>
-        <p style={{ margin: "4px 0 0", fontSize: "0.9rem", color: mutedColor }}>
-          Visão geral do haras HandHorse
-        </p>
+        <div
+          style={{
+            margin: "4px 0 0",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
+        >
+          {ownerLogoUrl ? (
+            <img
+              src={ownerLogoUrl}
+              alt={`Logo do ${harasNameForAlt}`}
+              width={20}
+              height={20}
+              decoding="async"
+              style={{
+                width: 20,
+                height: 20,
+                objectFit: "contain",
+                borderRadius: 4,
+                flexShrink: 0,
+                border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.08)",
+                backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+              }}
+            />
+          ) : null}
+          <p style={{ margin: 0, fontSize: "0.9rem", color: mutedColor }}>{harasOverviewSubtitle}</p>
+        </div>
       </div>
 
       {/* ── Agendas e Compromissos (primeiro card) ── */}
       <div style={{ ...glass, padding: "22px" }}>
-        <p
-          style={{
-            margin: "0 0 18px",
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.14em",
-            color: mutedColor,
-          }}
-        >
-          Agendas e Compromissos
-        </p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "18px" }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: "0.65rem",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.14em",
+              color: mutedColor,
+            }}
+          >
+            Agendas e Compromissos
+          </p>
+          <Link
+            href="/dashboard/reminders"
+            style={{ fontSize: "0.72rem", fontWeight: 700, color: "#3b82f6", textDecoration: "none" }}
+          >
+            Compromissos →
+          </Link>
+        </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {agendaItems.map((item) => {
-            return (
-              <div
-                key={item.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 12px",
-                  borderRadius: "16px",
-                  backgroundColor: subBg,
-                  border: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "rgba(148,163,184,0.15)"}`,
-                }}
-              >
+            const inner = (
+              <>
                 <div
                   style={{
                     width: "36px",
@@ -463,9 +605,32 @@ export default function DashboardPage() {
                     {item.subtitle}
                   </p>
                 </div>
+              </>
+            );
+            const rowStyle = {
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "10px 12px",
+              borderRadius: "16px",
+              backgroundColor: subBg,
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "rgba(148,163,184,0.15)"}`,
+            } as const;
+            return (
+              <div key={item.id} style={rowStyle}>
+                {"href" in item && item.href ? (
+                  <Link href={item.href} style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0, textDecoration: "none", color: "inherit" }}>
+                    {inner}
+                  </Link>
+                ) : (
+                  inner
+                )}
               </div>
             );
           })}
+          {!agendaLoading && agendaItems.length === 0 && (
+            <p style={{ margin: 0, fontSize: "0.8rem", color: mutedColor }}>Sem compromissos próximos.</p>
+          )}
         </div>
       </div>
 
@@ -645,49 +810,212 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Right column */}
+        {/* Right column — saúde e premiações no período */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* AI Insights */}
-          <div
-            style={{
-              padding: "24px",
-              borderRadius: "24px",
-              background: "linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              boxShadow: "0 8px 32px rgba(37,99,235,0.35)",
-            }}
-          >
-            <Sparkles size={28} color="#93c5fd" style={{ marginBottom: "12px" }} />
-            <h4 style={{ margin: "0 0 8px", fontSize: "1.1rem", fontWeight: 900, color: "#fff" }}>
-              HandHorse Insights
-            </h4>
-            <p style={{ margin: "0 0 20px", fontSize: "0.85rem", color: "#bfdbfe", lineHeight: 1.6 }}>
-              Descubra tendências de manejo e sugestões de pedigree para sua criação.
-            </p>
-            <button
-              type="button"
+          <div style={{ ...glass, padding: "22px 20px" }}>
+            <div
               style={{
-                width: "100%",
-                padding: "11px 0",
-                borderRadius: "16px",
-                border: "none",
-                backgroundColor: "#fff",
-                color: "#1d4ed8",
-                fontWeight: 700,
-                fontSize: "0.85rem",
-                cursor: "pointer",
-                transition: "background 0.15s",
-                boxSizing: "border-box",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#dbeafe";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#fff";
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+                marginBottom: "16px",
+                flexWrap: "wrap",
               }}
             >
-              Abrir Insights
-            </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "10px",
+                    backgroundColor: "rgba(244,63,94,0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <HeartPulse size={16} color="#f43f5e" />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: textColor }}>
+                    Procedimentos (saúde)
+                  </h3>
+                  <Link
+                    href="/dashboard/health"
+                    style={{
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      color: "#3b82f6",
+                      textDecoration: "none",
+                    }}
+                  >
+                    Ver todos →
+                  </Link>
+                </div>
+              </div>
+              <button
+                ref={healthPeriodBtnRef}
+                type="button"
+                style={periodPillStyle}
+                onClick={openOrTogglePeriodMenu("health")}
+                aria-haspopup="menu"
+                aria-expanded={periodMenu !== null}
+                aria-label="Período dos procedimentos"
+              >
+                {agendaLoading ? "…" : periodPillLabel}
+                <ChevronDown size={14} color="#3b82f6" aria-hidden />
+              </button>
+            </div>
+            {agendaLoading ? (
+              <p style={{ margin: 0, fontSize: "0.85rem", color: mutedColor }}>A carregar…</p>
+            ) : proceduresPieData.length === 0 ? (
+              <p style={{ margin: 0, fontSize: "0.85rem", color: mutedColor }}>
+                Nenhum procedimento registado neste período.
+              </p>
+            ) : (
+              <div style={{ height: "260px", width: "100%" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
+                    <Pie
+                      data={proceduresPieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="42%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={88}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {proceduresPieData.map((_, i) => (
+                        <Cell key={`cell-${i}`} fill={PROCEDURE_PIE_COLORS[i % PROCEDURE_PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={tooltipStyle}
+                      formatter={(value, _n, item) => {
+                        const name = item?.payload?.name ?? "";
+                        return [
+                          typeof value === "number"
+                            ? `${value} ${value === 1 ? "procedimento" : "procedimentos"}`
+                            : String(value),
+                          name,
+                        ];
+                      }}
+                    />
+                    <Legend
+                      layout="vertical"
+                      align="right"
+                      verticalAlign="middle"
+                      wrapperStyle={{ fontSize: "0.72rem", color: mutedColor, paddingLeft: 8 }}
+                      formatter={(value) => (
+                        <span style={{ color: textColor, fontWeight: 600 }}>{value}</span>
+                      )}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          <div style={{ ...glass, padding: "22px 20px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+                marginBottom: "14px",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "10px",
+                    backgroundColor: "rgba(245,158,11,0.14)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Trophy size={16} color="#f59e0b" />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: textColor }}>
+                    Premiações por animal
+                  </h3>
+                  <Link
+                    href="/dashboard/awards"
+                    style={{
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      color: "#3b82f6",
+                      textDecoration: "none",
+                    }}
+                  >
+                    Ver todas →
+                  </Link>
+                </div>
+              </div>
+              <button
+                ref={awardsPeriodBtnRef}
+                type="button"
+                style={periodPillStyle}
+                onClick={openOrTogglePeriodMenu("awards")}
+                aria-haspopup="menu"
+                aria-expanded={periodMenu !== null}
+                aria-label="Período das premiações"
+              >
+                {agendaLoading ? "…" : periodPillLabel}
+                <ChevronDown size={14} color="#3b82f6" aria-hidden />
+              </button>
+            </div>
+            {agendaLoading ? (
+              <p style={{ margin: 0, fontSize: "0.85rem", color: mutedColor }}>A carregar…</p>
+            ) : awardsByAnimalRows.length === 0 ? (
+              <p style={{ margin: 0, fontSize: "0.85rem", color: mutedColor }}>
+                Nenhuma premiação registada neste período.
+              </p>
+            ) : (
+              <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                {awardsByAnimalRows.map(([horseName, count], idx) => (
+                  <li
+                    key={horseName}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "10px",
+                      padding: "10px 0",
+                      borderTop: idx === 0 ? "none" : `1px solid ${dividerColor}`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "0.88rem",
+                        fontWeight: 700,
+                        color: textColor,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        minWidth: 0,
+                      }}
+                    >
+                      {horseName}
+                    </span>
+                    <span style={{ fontSize: "0.8rem", fontWeight: 700, color: mutedColor, flexShrink: 0 }}>
+                      {count} {count === 1 ? "premiação" : "premiações"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>

@@ -17,6 +17,7 @@ import {
   Check,
   Pencil,
   Trash2,
+  ArrowLeft,
 } from "lucide-react";
 import { useTheme } from "@/shared/ui/theme-context";
 import { mapApiAnimalToHorse } from "@/shared/domain/dashboard/map-api-animal";
@@ -26,6 +27,8 @@ import {
   deleteAnimalExamApi,
   listAnimalsApi,
   listExamTypesApi,
+  presignExamAttachmentApi,
+  putImageToPresignedUrl,
   updateAnimalExamApi,
   type ApiExamTypeRow,
 } from "@/shared/infrastructure/animals/animals-api";
@@ -69,7 +72,6 @@ type ExamFormState = {
   result: string;
   labName: string;
   validUntil: string;
-  attachmentUrl: string;
 };
 
 function emptyExamForm(defaultHorseId: string): ExamFormState {
@@ -81,7 +83,6 @@ function emptyExamForm(defaultHorseId: string): ExamFormState {
     result: "",
     labName: "",
     validUntil: "",
-    attachmentUrl: "",
   };
 }
 
@@ -107,9 +108,21 @@ export default function HealthPage() {
 
   const [showFilter, setShowFilter] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [removeAttachment, setRemoveAttachment] = useState(false);
+  const [hadAttachmentWhenEdit, setHadAttachmentWhenEdit] = useState(false);
   const setNavLoading = useNavLoadingSetter();
 
-  useScrollLock(showModal || showFilter);
+  useScrollLock(showFilter);
+
+  useEffect(() => {
+    if (!showModal) return;
+    const id = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showModal]);
 
   const refreshRecords = useCallback(async () => {
     const typeMap = new Map(examTypes.map((t) => [t.id, t.name]));
@@ -231,6 +244,10 @@ export default function HealthPage() {
     setSaveError(null);
     setEditingRecord(null);
     setForm(emptyExamForm(horses[0]?.id ?? ""));
+    setAttachmentFile(null);
+    setRemoveAttachment(false);
+    setHadAttachmentWhenEdit(false);
+    if (attachmentInputRef.current) attachmentInputRef.current.value = "";
     setShowModal(true);
   }
 
@@ -244,8 +261,11 @@ export default function HealthPage() {
       result: rec.result ?? "",
       labName: rec.labName ?? "",
       validUntil: rec.validUntil ? normalizeDateInput(rec.validUntil) : "",
-      attachmentUrl: rec.attachmentUrl ?? "",
     });
+    setAttachmentFile(null);
+    setRemoveAttachment(false);
+    setHadAttachmentWhenEdit(Boolean(rec.attachmentUrl?.trim()));
+    if (attachmentInputRef.current) attachmentInputRef.current.value = "";
     setShowModal(true);
   }
 
@@ -282,8 +302,17 @@ export default function HealthPage() {
         result: form.result.trim() || null,
         labName: form.labName.trim() || null,
         validUntil: form.validUntil.trim() || null,
-        attachmentUrl: form.attachmentUrl.trim() || null,
       };
+      const targetAnimalId = editingRecord ? editingRecord.animalId : form.horseId;
+      if (removeAttachment) {
+        payload.attachmentS3Key = null;
+        payload.attachmentUrl = null;
+      } else if (attachmentFile) {
+        const { uploadUrl, key } = await presignExamAttachmentApi(targetAnimalId, attachmentFile.type);
+        await putImageToPresignedUrl(uploadUrl, attachmentFile, attachmentFile.type);
+        payload.attachmentS3Key = key;
+        payload.attachmentUrl = null;
+      }
       if (editingRecord) {
         await updateAnimalExamApi(editingRecord.animalId, editingRecord.id, payload);
       } else {
@@ -312,8 +341,19 @@ export default function HealthPage() {
     }
   }
 
+  function closeExamForm() {
+    if (saving) return;
+    setShowModal(false);
+    setEditingRecord(null);
+    setAttachmentFile(null);
+    setRemoveAttachment(false);
+    setHadAttachmentWhenEdit(false);
+    if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+  }
+
   return (
     <>
+      {!showModal && (
       <div style={{ display: "flex", flexDirection: "column", gap: "28px", paddingBottom: "48px" }}>
         {loadError && !loading && (
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#f87171" }} role="alert">
@@ -358,7 +398,7 @@ export default function HealthPage() {
 
         {!loading && horses.length === 0 && (
           <p style={{ margin: 0, fontSize: "0.9rem", color: mutedColor }}>
-            Cadastre animais no registo para passar a registar exames.
+            Cadastre animais no registro para passar a registrar exames.
           </p>
         )}
         {!loading && horses.length > 0 && examTypes.length === 0 && (
@@ -836,7 +876,19 @@ export default function HealthPage() {
                               gridColumn: "1 / -1",
                             }}
                           >
-                            <strong style={{ color: textColor }}>Anexo:</strong> {rec.attachmentUrl || "—"}
+                            <strong style={{ color: textColor }}>Comprovante:</strong>{" "}
+                            {rec.attachmentUrl ? (
+                              <a
+                                href={rec.attachmentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: "#3b82f6", fontWeight: 600 }}
+                              >
+                                Ver ficheiro
+                              </a>
+                            ) : (
+                              "—"
+                            )}
                           </div>
                         </div>
 
@@ -892,61 +944,55 @@ export default function HealthPage() {
           </div>
         </div>
       </div>
+      )}
 
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-          <div
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "20px",
+            paddingBottom: "48px",
+            maxWidth: "520px",
+            margin: "0 auto",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <button
+            type="button"
+            disabled={saving}
+            onClick={closeExamForm}
             style={{
-              position: "absolute",
-              inset: 0,
-              backgroundColor: "rgba(0,0,0,0.6)",
-              backdropFilter: "blur(6px)",
-              WebkitBackdropFilter: "blur(6px)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              alignSelf: "flex-start",
+              padding: "10px 14px",
+              borderRadius: "14px",
+              border: `1px solid ${dividerColor}`,
+              background: isDark ? "rgba(255,255,255,0.04)" : "#ffffff",
+              color: textColor,
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              cursor: saving ? "not-allowed" : "pointer",
+              opacity: saving ? 0.7 : 1,
             }}
-            onClick={() => {
-              setShowModal(false);
-              setEditingRecord(null);
-            }}
-          />
+          >
+            <ArrowLeft size={18} aria-hidden />
+            Voltar à lista
+          </button>
+
           <div
             style={{
               ...glassDark,
               position: "relative",
               width: "100%",
-              maxWidth: "480px",
               borderRadius: "28px",
               padding: "32px",
               boxSizing: "border-box",
-              maxHeight: "calc(100vh - 32px)",
-              overflowY: "auto",
             }}
           >
-            <button
-              type="button"
-              onClick={() => {
-                setShowModal(false);
-                setEditingRecord(null);
-              }}
-              aria-label="Fechar"
-              style={{
-                position: "absolute",
-                top: "16px",
-                right: "16px",
-                width: "32px",
-                height: "32px",
-                borderRadius: "50%",
-                border: `1px solid ${dividerColor}`,
-                background: "transparent",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: mutedColor,
-              }}
-            >
-              <X size={16} />
-            </button>
-
             <h3 style={{ margin: "0 0 24px", fontSize: "1.4rem", fontWeight: 900, color: textColor }}>
               {editingRecord ? "Editar exame" : "Novo registro de saúde"}
             </h3>
@@ -1066,13 +1112,61 @@ export default function HealthPage() {
                 />
               </div>
 
-              <input
-                type="url"
-                placeholder="URL do anexo"
-                value={form.attachmentUrl}
-                onChange={(e) => patchForm({ attachmentUrl: e.target.value })}
-                style={inputStyle}
-              />
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: mutedColor,
+                    marginBottom: "6px",
+                  }}
+                >
+                  Comprovante (opcional)
+                </label>
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    setAttachmentFile(f);
+                    if (f) setRemoveAttachment(false);
+                  }}
+                  style={{ ...inputStyle, padding: "10px 14px" }}
+                />
+                <p style={{ margin: "6px 0 0", fontSize: "0.75rem", color: mutedColor }}>
+                  Imagem ou PDF. Se escolher um ficheiro novo, substitui o anterior.
+                </p>
+                {editingRecord && hadAttachmentWhenEdit && (
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      marginTop: "10px",
+                      fontSize: "0.85rem",
+                      color: textColor,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={removeAttachment}
+                      onChange={(e) => {
+                        setRemoveAttachment(e.target.checked);
+                        if (e.target.checked) {
+                          setAttachmentFile(null);
+                          if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+                        }
+                      }}
+                    />
+                    Remover comprovante atual
+                  </label>
+                )}
+              </div>
 
               {saveError && (
                 <p style={{ margin: 0, fontSize: "0.85rem", color: "#f87171" }} role="alert">

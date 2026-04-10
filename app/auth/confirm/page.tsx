@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Mail, KeyRound, Sun, Moon } from "lucide-react";
@@ -10,7 +10,7 @@ import { saveLocalOnboardingData } from "@/shared/application/auth/onboarding-st
 
 const PRIMARY_COLOR = "#2563EB";
 
-export default function ConfirmPage() {
+function ConfirmPageInner() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -279,5 +279,29 @@ export default function ConfirmPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ConfirmPage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#020617",
+            color: "#9CA3AF",
+            fontSize: "0.9rem",
+          }}
+        >
+          Carregando…
+        </div>
+      }
+    >
+      <ConfirmPageInner />
+    </Suspense>
   );
 }
