@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+
+# Build / cache
+*.tsbuildinfo
+.turbo/
+
+# Testing
+coverage/
+
+# Logs & debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Ambiente — não versionar segredos (manter só .env.example)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+.env*.local
+
+# Vercel
+.vercel
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Terraform local (estado e segredos ficam em terraform/.gitignore; reforço na raiz)
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfvars
+terraform/crash.log
+terraform/override.tf
