@@ -290,39 +290,43 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
         {children}
       </main>
 
-      {/* ── Loading discreto + navegação principal ── */}
-      <div className={styles.navZone}>
-        <DashboardNavLoadingStrip isDark={isDark} mutedColor={mutedColor} />
-        <nav className={styles.nav} aria-label="Navegação principal">
-          <div className={styles.navPill} style={glass}>
-            {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
-              const isActive = pathname === href;
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  aria-label={label}
-                  title={label}
-                  style={{
-                    padding: "12px",
-                    borderRadius: "22px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    textDecoration: "none",
-                    transition: "background 0.2s, box-shadow 0.2s",
-                    backgroundColor: isActive ? "#2563eb" : "transparent",
-                    color: isActive ? "#fff" : mutedColor,
-                    boxShadow: isActive ? "0 4px 16px rgba(37,99,235,0.4)" : "none",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Icon size={21} strokeWidth={isActive ? 2.5 : 2} />
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
+      {/* ── Navegação (sidebar em desktop) + loading no rodapé do ecrã em desktop ── */}
+      <div className={styles.chromeDock}>
+        <footer className={styles.navZone} aria-label="Navegação principal">
+          <nav className={styles.nav} aria-label="Secções">
+            <div className={styles.navPill} style={glass}>
+              {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
+                const isActive = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-label={label}
+                    title={label}
+                    style={{
+                      padding: "12px",
+                      borderRadius: "22px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textDecoration: "none",
+                      transition: "background 0.2s, box-shadow 0.2s",
+                      backgroundColor: isActive ? "#2563eb" : "transparent",
+                      color: isActive ? "#fff" : mutedColor,
+                      boxShadow: isActive ? "0 4px 16px rgba(37,99,235,0.4)" : "none",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Icon size={21} strokeWidth={isActive ? 2.5 : 2} />
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+        </footer>
+        <div className={styles.screenFooterLoading}>
+          <DashboardNavLoadingStrip isDark={isDark} mutedColor={mutedColor} />
+        </div>
       </div>
     </div>
   );

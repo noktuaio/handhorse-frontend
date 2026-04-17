@@ -1,10 +1,18 @@
-import Link from "next/link";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function HomePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/auth/login");
+  }, [router]);
+
   return (
     <main>
-      <h1>AppAI</h1>
-      <Link href="/auth/login">Ir para login</Link>
+      <p>A redirecionar para o login…</p>
     </main>
   );
 }

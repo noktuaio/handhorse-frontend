@@ -1,0 +1,10 @@
+# Copiar para terraform.tfvars (não versionar segredos).
+# aws_region   = "us-east-2"
+# aws_profile  = "default"
+# bucket_name  = "meu-bucket-front-unico-globalmente"
+
+# Domínio custom (certificado tem de estar em us-east-1 na AWS):
+# domain_name         = "app.exemplo.com"
+# acm_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT:certificate/UUID"
+# route53_zone_id     = "Z..."
+# create_route53_alias = true

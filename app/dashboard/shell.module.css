@@ -31,30 +31,99 @@
 @media (min-width: 768px) {
   .main {
     padding-top: 40px;
+    /* Espaço para o strip de loading no rodapé do ecrã (desktop) */
+    padding-bottom: 48px;
   }
 }
 
-/* Nav + loading strip (stacked: mensagem + barra fina + nav) */
-.navZone {
-  position: fixed;
-  bottom: 20px;
-  left: 16px;
-  right: 16px;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+/*
+ * chromeDock: no telemóvel agrupa nav + loading no mesmo bloco fixo ao fundo.
+ * No desktop: NÃO usar display:contents — em vários browsers faz com que position:fixed
+ * dos filhos se comporte mal (layout de sidebar em viewport estreita / responsive mode).
+ * Um wrapper estático com altura 0 mantém os filhos fixed relativos ao viewport.
+ */
+.chromeDock {
   pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .chromeDock {
+    position: fixed;
+    bottom: 20px;
+    left: 16px;
+    right: 16px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+@media (min-width: 768px) {
+  .chromeDock {
+    position: static;
+    display: block;
+    width: auto;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    z-index: auto;
+  }
+}
+
+/* Barra de navegação: fundo no mobile; coluna esquerda centrada no desktop */
+.navZone {
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .navZone {
+    position: static;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
 }
 
 @media (min-width: 768px) {
   .navZone {
+    position: fixed;
     left: 12px;
-    right: auto;
     top: 50%;
     bottom: auto;
+    right: auto;
     transform: translateY(-50%);
+    z-index: 50;
+  }
+}
+
+/* Rodapé do ecrã (desktop): loading fora da sidebar; mobile: slot na pilha do chromeDock */
+.screenFooterLoading {
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+@media (max-width: 767px) {
+  .screenFooterLoading {
+    position: static;
+    max-width: min(420px, 100%);
+  }
+}
+
+@media (min-width: 768px) {
+  .screenFooterLoading {
+    position: fixed;
+    bottom: max(20px, env(safe-area-inset-bottom, 0px));
+    left: 88px;
+    right: 16px;
+    z-index: 45;
+    width: auto;
+    max-width: none;
   }
 }
 

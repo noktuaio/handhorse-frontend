@@ -27,7 +27,7 @@ export function NavLoadingProvider({ children }: { children: ReactNode }) {
   return <NavLoadingContext.Provider value={value}>{children}</NavLoadingContext.Provider>;
 }
 
-/** Permite que uma página (ex.: registro) mostre o carregamento discreto junto à navegação principal. */
+/** Permite que uma página mostre o carregamento discreto no footer (abaixo da barra de navegação). */
 export function useNavLoadingSetter() {
   const ctx = useContext(NavLoadingContext);
   if (!ctx) {
