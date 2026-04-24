@@ -1,18 +1,72 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { THEME_STORAGE_KEY } from "./theme-constants";
 
 type Theme = "light" | "dark";
 
+export { THEME_STORAGE_KEY } from "./theme-constants";
+
 type ThemeContextValue = {
   theme: Theme;
+  setTheme: (t: Theme) => void;
+  /** Mantido para páginas de auth; também persiste no localStorage */
   toggleTheme: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
+function isTheme(v: string | null): v is Theme {
+  return v === "light" || v === "dark";
+}
+
+function readThemeFromStorage(): Theme {
+  if (typeof window === "undefined") return "light";
+  try {
+    const v = localStorage.getItem(THEME_STORAGE_KEY);
+    if (isTheme(v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return "light";
+}
+
+function writeThemeToStorage(t: Theme): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, t);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setThemeState] = useState<Theme>("light");
+
+  useLayoutEffect(() => {
+    setThemeState(readThemeFromStorage());
+  }, []);
+
+  const setTheme = useCallback((t: Theme) => {
+    setThemeState(t);
+    writeThemeToStorage(t);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setThemeState((current) => {
+      const n = current === "dark" ? "light" : "dark";
+      writeThemeToStorage(n);
+      return n;
+    });
+  }, []);
 
   const isDark = theme === "dark";
 
@@ -23,6 +77,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const pageBackgroundColor = isDark ? "#020617" : "#f8fafc";
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
     const { body } = document;
     body.style.margin = "0";
     body.style.backgroundImage = pageBackground;
@@ -30,13 +85,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     body.style.backgroundRepeat = "no-repeat";
     body.style.backgroundAttachment = "fixed";
     body.style.backgroundSize = "cover";
-  }, [pageBackground, pageBackgroundColor]);
+    if (document.documentElement) {
+      document.documentElement.setAttribute("data-handhorse-theme", theme);
+    }
+  }, [pageBackground, pageBackgroundColor, theme]);
 
   const value: ThemeContextValue = {
     theme,
-    toggleTheme: () => {
-      setTheme((current) => (current === "dark" ? "light" : "dark"));
-    },
+    setTheme,
+    toggleTheme,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

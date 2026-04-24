@@ -65,7 +65,7 @@ function formatCompletedAt(iso: string | null | undefined): string {
   });
 }
 
-type StatusFilter = "all" | "pending" | "done" | "skipped";
+type StatusFilter = "pending" | "done" | "skipped";
 
 export default function RemindersPage() {
   const { theme } = useTheme();
@@ -102,8 +102,8 @@ export default function RemindersPage() {
       dueFrom: isoAddDays(-730),
       dueTo: isoAddDays(730),
       limit: 200,
+      status: statusFilter,
     };
-    if (statusFilter !== "all") base.status = statusFilter;
     return base;
   }, [statusFilter]);
 
@@ -197,7 +197,6 @@ export default function RemindersPage() {
         {(
           [
             { id: "pending" as const, label: "Pendentes" },
-            { id: "all" as const, label: "Todos" },
             { id: "done" as const, label: "Concluídos" },
             { id: "skipped" as const, label: "Ignorados" },
           ] as const

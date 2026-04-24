@@ -11,15 +11,16 @@ import {
   Wallet,
   GitBranch,
   Trophy,
-  Sun,
-  Moon,
   LogOut,
   User,
   Building2,
   ChevronDown,
+  Menu,
+  X,
 } from "lucide-react";
 import { IconHorse } from "@tabler/icons-react";
 import { useTheme } from "@/shared/ui/theme-context";
+import { useScrollLock } from "@/shared/ui/use-scroll-lock";
 import { clearAuthTokens } from "@/shared/infrastructure/auth/token-storage";
 import {
   DashboardNavLoadingStrip,
@@ -205,10 +206,202 @@ function ProfileMenu({ isDark }: { isDark: boolean }) {
   );
 }
 
+function AppSideDrawer({
+  open,
+  onClose,
+  isDark,
+  pathname,
+}: {
+  open: boolean;
+  onClose: () => void;
+  isDark: boolean;
+  pathname: string;
+}) {
+  const router = useRouter();
+  useScrollLock(open);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const panelBg = isDark ? "#0f1419" : "#f8fafc";
+  const borderC = isDark ? "#2d3548" : "#e2e8f0";
+  const text = isDark ? "#E5E7EB" : "#0f172a";
+  const muted = isDark ? "#9CA3AF" : "#64748b";
+
+  const itemBase: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    width: "100%",
+    padding: "12px 12px",
+    borderRadius: "12px",
+    textDecoration: "none",
+    color: text,
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: "inherit",
+    boxSizing: "border-box",
+  };
+
+  function handleLogout() {
+    clearAuthTokens();
+    onClose();
+    router.push("/auth/login");
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.drawerOverlay}
+        aria-label="Fechar menu"
+        onClick={onClose}
+      />
+      <div
+        className={styles.drawerPanel}
+        style={{ background: panelBg, borderRight: `1px solid ${borderC}` }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navegação e conta"
+        id="app-dashboard-drawer"
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "16px 16px 12px",
+            borderBottom: `1px solid ${borderC}`,
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ fontWeight: 800, color: text, fontSize: "1rem" }}>Menu</span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar menu"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 8,
+              borderRadius: 12,
+              border: "none",
+              background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+              cursor: "pointer",
+            }}
+          >
+            <X size={22} color={muted} aria-hidden />
+          </button>
+        </div>
+
+        <nav
+          style={{ flex: 1, overflow: "auto", padding: "12px 10px" }}
+          aria-label="Secções do painel"
+        >
+          <p
+            style={{
+              fontSize: "0.65rem",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.12em",
+              color: muted,
+              margin: "8px 8px 10px",
+            }}
+          >
+            Secções
+          </p>
+          {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
+            const isActive = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={onClose}
+                style={{
+                  ...itemBase,
+                  marginBottom: 4,
+                  backgroundColor: isActive
+                    ? isDark
+                      ? "rgba(37,99,235,0.25)"
+                      : "rgba(37,99,235,0.1)"
+                    : "transparent",
+                  color: isActive ? "#3b82f6" : text,
+                }}
+              >
+                <Icon size={20} strokeWidth={isActive ? 2.5 : 2} color={isActive ? "#3b82f6" : muted} />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div
+          style={{
+            borderTop: `1px solid ${borderC}`,
+            padding: "12px 10px 20px",
+            flexShrink: 0,
+          }}
+        >
+          <p
+            style={{
+              fontSize: "0.65rem",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.12em",
+              color: muted,
+              margin: "8px 8px 10px",
+            }}
+          >
+            Conta
+          </p>
+          <Link
+            href="/dashboard/profile"
+            onClick={onClose}
+            style={{ ...itemBase, marginBottom: 4 }}
+          >
+            <User size={20} color="#3b82f6" aria-hidden />
+            Meus dados
+          </Link>
+          <Link
+            href="/dashboard/haras"
+            onClick={onClose}
+            style={{ ...itemBase, marginBottom: 4 }}
+          >
+            <Building2 size={20} color="#10b981" aria-hidden />
+            Meu Haras
+          </Link>
+          <button type="button" onClick={handleLogout} style={{ ...itemBase, color: "#ef4444" }}>
+            <LogOut size={20} aria-hidden />
+            Sair
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function DashboardLayoutInner({ children }: { children: ReactNode }) {
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const pathname = usePathname();
   const isDark = theme === "dark";
+  const [sideMenuOpen, setSideMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setSideMenuOpen(false);
+  }, [pathname]);
 
   const glass: CSSProperties = {
     background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.75)",
@@ -225,6 +418,12 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
 
   return (
     <div className={styles.root}>
+      <AppSideDrawer
+        open={sideMenuOpen}
+        onClose={() => setSideMenuOpen(false)}
+        isDark={isDark}
+        pathname={pathname}
+      />
       {/* ── Top Header ── */}
       <header className={styles.header}>
         <div
@@ -237,32 +436,23 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
             justifyContent: "space-between",
             maxWidth: "1280px",
             margin: "0 auto",
+            gap: 12,
           }}
         >
-          {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <Image src="/logo-handhorse.png" alt="HandHorse" width={34} height={34} />
-            <span
-              style={{
-                fontWeight: 900,
-                fontSize: "1.05rem",
-                letterSpacing: "-0.02em",
-                background: "linear-gradient(90deg, #3b82f6, #10b981)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              HandHorse
-            </span>
-          </div>
-
-          {/* Actions */}
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              minWidth: 0,
+            }}
+          >
             <button
               type="button"
-              onClick={toggleTheme}
-              aria-label="Alternar tema claro/escuro"
+              onClick={() => setSideMenuOpen((o) => !o)}
+              aria-label={sideMenuOpen ? "Fechar menu de navegação" : "Abrir menu de navegação"}
+              aria-expanded={sideMenuOpen}
+              aria-controls="app-dashboard-drawer"
               style={{
                 ...glass,
                 padding: "9px",
@@ -271,15 +461,35 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
+                border: "1px solid transparent",
               }}
             >
-              {isDark ? (
-                <Sun size={18} color="#FACC15" />
+              {sideMenuOpen ? (
+                <X size={20} color={isDark ? "#E5E7EB" : "#0f172a"} aria-hidden />
               ) : (
-                <Moon size={18} color="#1F2937" />
+                <Menu size={20} color={isDark ? "#E5E7EB" : "#0f172a"} aria-hidden />
               )}
             </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+              <Image src="/logo-handhorse.png" alt="HandHorse" width={34} height={34} />
+              <span
+                style={{
+                  fontWeight: 900,
+                  fontSize: "1.05rem",
+                  letterSpacing: "-0.02em",
+                  background: "linear-gradient(90deg, #3b82f6, #10b981)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                HandHorse
+              </span>
+            </div>
+          </div>
 
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
             <ProfileMenu isDark={isDark} />
           </div>
         </div>
@@ -306,7 +516,8 @@ function DashboardLayoutInner({ children }: { children: ReactNode }) {
                     style={{
                       padding: "12px",
                       borderRadius: "22px",
-                      display: "flex",
+                      /* inline-flex: antes de carregar o CSS de .navPill, evita blocos empilhados (flex em <a> vira block) */
+                      display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
                       textDecoration: "none",

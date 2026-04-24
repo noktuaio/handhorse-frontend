@@ -1347,35 +1347,33 @@ export default function RegistryPage() {
                   />
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div>
-                    <label htmlFor="registry-horse-gender" style={fieldLabel}>
-                      Sexo
-                    </label>
-                    <select
-                      id="registry-horse-gender"
-                      value={newHorse.gender}
-                      onChange={(e) => patch({ gender: e.target.value as Horse["gender"] })}
-                      style={inputStyle}
-                    >
-                      <option value="Stallion">Garanhão</option>
-                      <option value="Mare">Égua</option>
-                      <option value="Gelding">Castrado</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="registry-horse-birth" style={fieldLabel}>
-                      Data de nascimento
-                    </label>
-                    <input
-                      id="registry-horse-birth"
-                      type="date"
-                      required
-                      value={newHorse.birthDate}
-                      onChange={(e) => patch({ birthDate: e.target.value })}
-                      style={inputStyle}
-                    />
-                  </div>
+                <div>
+                  <label htmlFor="registry-horse-gender" style={fieldLabel}>
+                    Sexo
+                  </label>
+                  <select
+                    id="registry-horse-gender"
+                    value={newHorse.gender}
+                    onChange={(e) => patch({ gender: e.target.value as Horse["gender"] })}
+                    style={{ ...inputStyle, minWidth: 0 }}
+                  >
+                    <option value="Stallion">Garanhão</option>
+                    <option value="Mare">Égua</option>
+                    <option value="Gelding">Castrado</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="registry-horse-birth" style={fieldLabel}>
+                    Data de nascimento
+                  </label>
+                  <input
+                    id="registry-horse-birth"
+                    type="date"
+                    required
+                    value={newHorse.birthDate}
+                    onChange={(e) => patch({ birthDate: e.target.value })}
+                    style={{ ...inputStyle, minWidth: 0, maxWidth: "100%" }}
+                  />
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>

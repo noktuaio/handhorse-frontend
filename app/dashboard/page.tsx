@@ -10,6 +10,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Activity,
   Bell,
@@ -240,9 +241,11 @@ function reminderTriggerLabel(kind: string): string {
 // ── component ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { theme } = useTheme();
   const { session } = useDashboardSession();
   const isDark = theme === "dark";
+  const cardHoverClass = `${styles.dashboardClickableCard}${isDark ? ` ${styles.dashboardClickableCardDark}` : ""}`;
   const harasOverviewSubtitle =
     session?.owner?.name?.trim() != null && session.owner.name.trim() !== ""
       ? `Visão geral do haras ${session.owner.name.trim()}`
@@ -406,6 +409,14 @@ export default function DashboardPage() {
     [],
   );
 
+  const onPeriodButtonClick = useCallback(
+    (anchor: "finance" | "chart" | "health" | "awards") => (e: ReactMouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      openOrTogglePeriodMenu(anchor)(e);
+    },
+    [openOrTogglePeriodMenu],
+  );
+
   useEffect(() => {
     if (!periodMenu) return;
     const onKey = (ev: globalThis.KeyboardEvent) => {
@@ -547,7 +558,19 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Agendas e Compromissos (primeiro card) ── */}
-      <div style={{ ...glass, padding: "22px" }}>
+      <div
+        className={cardHoverClass}
+        style={{ ...glass, padding: "22px" }}
+        role="link"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            router.push("/dashboard/reminders");
+          }
+        }}
+        onClick={() => router.push("/dashboard/reminders")}
+      >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "18px" }}>
           <p
             style={{
@@ -563,6 +586,7 @@ export default function DashboardPage() {
           </p>
           <Link
             href="/dashboard/reminders"
+            onClick={(e) => e.stopPropagation()}
             style={{ fontSize: "0.72rem", fontWeight: 700, color: "#3b82f6", textDecoration: "none" }}
           >
             Compromissos →
@@ -619,7 +643,11 @@ export default function DashboardPage() {
             return (
               <div key={item.id} style={rowStyle}>
                 {"href" in item && item.href ? (
-                  <Link href={item.href} style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0, textDecoration: "none", color: "inherit" }}>
+                  <Link
+                    href={item.href}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0, textDecoration: "none", color: "inherit" }}
+                  >
                     {inner}
                   </Link>
                 ) : (
@@ -637,7 +665,19 @@ export default function DashboardPage() {
       {/* ── Stat cards ── */}
       <div className={styles.topStatsGrid}>
         {/* Cavalos */}
-        <div style={{ ...glass, padding: "20px" }}>
+        <div
+          className={cardHoverClass}
+          style={{ ...glass, padding: "20px" }}
+          role="link"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              router.push("/dashboard/registry");
+            }
+          }}
+          onClick={() => router.push("/dashboard/registry")}
+        >
           <div
             style={{
               width: "40px",
@@ -661,7 +701,19 @@ export default function DashboardPage() {
         </div>
 
         {/* Financeiro — combined card */}
-        <div style={{ ...glass, padding: "16px" }}>
+        <div
+          className={cardHoverClass}
+          style={{ ...glass, padding: "16px" }}
+          role="link"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              router.push("/dashboard/finances");
+            }
+          }}
+          onClick={() => router.push("/dashboard/finances")}
+        >
           <div
             style={{
               display: "flex",
@@ -695,7 +747,7 @@ export default function DashboardPage() {
               ref={financePeriodBtnRef}
               type="button"
               style={periodPillStyle}
-              onClick={openOrTogglePeriodMenu("finance")}
+              onClick={onPeriodButtonClick("finance")}
               aria-haspopup="menu"
               aria-expanded={periodMenu !== null}
               aria-label="Período financeiro"
@@ -753,7 +805,7 @@ export default function DashboardPage() {
               ref={chartPeriodBtnRef}
               type="button"
               style={periodPillStyle}
-              onClick={openOrTogglePeriodMenu("chart")}
+              onClick={onPeriodButtonClick("chart")}
               aria-haspopup="menu"
               aria-expanded={periodMenu !== null}
               aria-label="Período financeiro"
@@ -812,7 +864,19 @@ export default function DashboardPage() {
 
         {/* Right column — saúde e premiações no período */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <div style={{ ...glass, padding: "22px 20px" }}>
+          <div
+            className={cardHoverClass}
+            style={{ ...glass, padding: "22px 20px" }}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                router.push("/dashboard/health");
+              }
+            }}
+            onClick={() => router.push("/dashboard/health")}
+          >
             <div
               style={{
                 display: "flex",
@@ -844,6 +908,7 @@ export default function DashboardPage() {
                   </h3>
                   <Link
                     href="/dashboard/health"
+                    onClick={(e) => e.stopPropagation()}
                     style={{
                       fontSize: "0.7rem",
                       fontWeight: 600,
@@ -859,7 +924,7 @@ export default function DashboardPage() {
                 ref={healthPeriodBtnRef}
                 type="button"
                 style={periodPillStyle}
-                onClick={openOrTogglePeriodMenu("health")}
+                onClick={onPeriodButtonClick("health")}
                 aria-haspopup="menu"
                 aria-expanded={periodMenu !== null}
                 aria-label="Período dos procedimentos"
@@ -920,7 +985,19 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div style={{ ...glass, padding: "22px 20px" }}>
+          <div
+            className={cardHoverClass}
+            style={{ ...glass, padding: "22px 20px" }}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                router.push("/dashboard/awards");
+              }
+            }}
+            onClick={() => router.push("/dashboard/awards")}
+          >
             <div
               style={{
                 display: "flex",
@@ -952,6 +1029,7 @@ export default function DashboardPage() {
                   </h3>
                   <Link
                     href="/dashboard/awards"
+                    onClick={(e) => e.stopPropagation()}
                     style={{
                       fontSize: "0.7rem",
                       fontWeight: 600,
@@ -967,7 +1045,7 @@ export default function DashboardPage() {
                 ref={awardsPeriodBtnRef}
                 type="button"
                 style={periodPillStyle}
-                onClick={openOrTogglePeriodMenu("awards")}
+                onClick={onPeriodButtonClick("awards")}
                 aria-haspopup="menu"
                 aria-expanded={periodMenu !== null}
                 aria-label="Período das premiações"

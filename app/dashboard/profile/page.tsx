@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, type CSSProperties, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/shared/ui/theme-context";
 import { patchMeApi } from "@/shared/infrastructure/access-control/access-control-api";
 import {
@@ -14,7 +15,7 @@ import { useDashboardSession } from "../session-context";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const isDark = theme === "dark";
   const { session, refreshSession } = useDashboardSession();
   const [name, setName] = useState("");
@@ -132,6 +133,75 @@ export default function ProfilePage() {
           )}
         </div>
         <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <fieldset
+            style={{
+              border: "none",
+              margin: 0,
+              padding: 0,
+              marginBottom: "4px",
+            }}
+          >
+            <legend style={{ ...labelStyle, padding: 0 }}>Aparência</legend>
+            <p style={{ margin: "0 0 10px", fontSize: "0.8rem", lineHeight: 1.4, color: mutedColor }}>
+              Modo diurno ou noturno. A preferência fica guardada neste dispositivo.
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "10px",
+                maxWidth: "100%",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setTheme("light")}
+                aria-pressed={theme === "light"}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  border: `2px solid ${theme === "light" ? "#2563eb" : isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"}`,
+                  background: theme === "light" ? (isDark ? "rgba(37,99,235,0.2)" : "rgba(37,99,235,0.1)") : inputStyle.background,
+                  color: textColor,
+                  fontSize: "0.88rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                <Sun size={18} color={theme === "light" ? "#FACC15" : mutedColor} aria-hidden />
+                Diurno
+              </button>
+              <button
+                type="button"
+                onClick={() => setTheme("dark")}
+                aria-pressed={theme === "dark"}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  border: `2px solid ${theme === "dark" ? "#2563eb" : isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"}`,
+                  background: theme === "dark" ? (isDark ? "rgba(37,99,235,0.2)" : "rgba(37,99,235,0.1)") : inputStyle.background,
+                  color: textColor,
+                  fontSize: "0.88rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                <Moon size={18} color={theme === "dark" ? "#93c5fd" : mutedColor} aria-hidden />
+                Noturno
+              </button>
+            </div>
+          </fieldset>
+
           <div>
             <label style={labelStyle}>Nome</label>
             <input
